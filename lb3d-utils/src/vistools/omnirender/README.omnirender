@@ -1,0 +1,83 @@
+Usage: ./omnirender.py <file id> [<params/flags>]
+
+Where <file id> is everything between 'colour_' and '.vtk'.
+
+If the flag '-writeimage' is specified, this will create rendered_<file id>.png.
+If the flag '-interactive' is specified, an interactive window will open.
+
+Flags:
+
+* Render mode:
+  -interactive / -writeimage (either of those should be set, but not both)
+
+* Datasets:
+  -nocolourdata
+  -norockdata
+  -nospheres
+
+* Data representation:
+  -noisosurface
+  -novolume
+  -norockisosurface
+  -norockvolume
+
+* Outlines:
+  -nooutline
+  -sliceoutline
+
+Parameters and their default values:
+Arrays should be specified as comma-separated values, ex. '-isocolor=0.7,0.8,0.0'.
+
+* Camera:
+  -elevation=10.0
+  -zoom=4.0
+  -azimuth=-10.0
+  -size=800x600
+
+* Colourfield:
+  -isoopacity=0.4
+  -isovalue=0.0
+  -isocolour=[0.8,0.2,0.9]
+
+  -volumeopacitylow=0.01
+  -volumeopacityhigh=0.01
+
+* Rock:
+  -rockisoopacity=0.2
+  -rockisovalue=1.0
+  -rockisocolour=[0.7,0.7,0.7]
+
+  -rockvolumecolourlow=[0.5,0.5,0.5]
+  -rockvolumecolourhigh=[0.5,0.5,0.5]
+  -rockvolumeopacitylow=0.01
+  -rockvolumeopacityhigh=0.01
+
+* Spherical particles:
+  -sphereradius=2.0
+  -sphereopacity=0.1
+  -spherecolour=[0.0,1.0,0.0]
+  -sphereidcolumn=18 (the number of the column holding the ID in the particle file, starting at 0)
+  -spheretracerlist=[] (list of particle IDs to render in a different colour/opacity)
+  -spheretraceropacity=1.0
+  -spheretracercolour=[0.0,0.0,0.0]
+
+* Ellipsoidal particles:
+  -ellipsoids (enable ellipsoids rendering)
+  -sphereradius=2.0 (there is no -ellipsoidradius yet, better would be specifying both half axes directly)
+  -ellipsoidanisotropy=2.0 (ratio R_para/R_orth)
+  -ellipsoidopacity=0.1
+  -ellipsoidcolour=[0.0,1.0,0.0]
+  -ellipsoididcolumn=16 (the number of the column holding the ID in the particle file, starting at 0)
+  -ellipsoidtracerlist=[] (list of particle IDs to render in a different colour/opacity)
+  -ellipsoidtraceropacity=1.0
+  -ellipsoidtracercolour=[0.0,0.0,0.0]
+
+* Slicing:
+  -xmin=0
+  -xmax=0
+  -ymin=0
+  -ymax=0
+  -zmin=0
+  -zmax=0
+
+

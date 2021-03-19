@@ -1,0 +1,18 @@
+=============================
+XMT Data
+=============================
+
+The .tom file contains the raw XMT data. This consists of a 512-byte
+header, followed by the digitized rock, as a 3D array of 8-bit unsigned chars. 
+Under UNIX, the header can be removed, for example with the dd(1) utility:
+
+dd if=file.tom of=file.raw bs=512 skip=1
+
+This creates a new file, file.raw, which contains *only* the raw data. 
+
+Using the C utility xmt2ascii included here this 
+raw data can be downsized and converted into an ascii rock file for LB3D.
+The data are tresholded to create a bitmap (only 0's and 1's), and only the rock sites with their 
+coordinates are written in ascii format.
+If xmt2ascii_mirror is used the data are also mirrored respect to the xy plane.
+

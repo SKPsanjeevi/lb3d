@@ -1,0 +1,12 @@
+#!/bin/bash -x
+#MSUB -l nodes=128:ppn=8
+#MSUB -l walltime=0:30:00
+#MSUB -M first.lastname@your.site.edu
+#MSUB -m abe
+#MSUB -N JUROPA_job
+### start of jobscript
+
+# Use 'msub <jobfile>' to submit.
+
+mpiexec -x -np 1024 ./lbe -f input-file
+

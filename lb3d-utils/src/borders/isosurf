@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# this is a script to convert text files written by the block tool
+# to be visualized by gnuplot. Pipe the text file version of the 
+# rock file through this script and plot the output with splot.
+# The boundary planes where the rock color changes are plotted 
+# as isosurfaces.
+
+awk 'BEGIN{\
+   xmin=1;\
+   xmax=1;\
+   ymin=1;\
+   ymax=0;\
+   zmin=0;\
+   zmax=0;\
+  }{\
+  grid[$1 " " $2 " " $3 ] = $4;\
+  if(xmin>xmax){\
+   xmin=$1;\
+   xmax=$1;\
+  }\
+  if(ymin>ymax){\
+   ymin=$2;\
+   ymax=$2;\
+  }\
+  if(zmin>zmax){\
+   zmin=$3;\
+   zmax=$3;\
+  }\
+  if($1<xmin){xmin=$1};\
+  if($1>xmax){xmax=$1};\
+  if($2<ymin){ymin=$2};\
+  if($2>ymax){ymax=$2};\
+  if($3<zmin){zmin=$3};\
+  if($3>zmax){zmax=$3};\
+  }END{\
+  for(z=zmin;z<zmax;z=z+1){\
+   for(y=ymin;y<ymax;y=y+1){\
+    for(x=xmin;x<xmax;x=x+1){\
+      if(grid[x " " y " " z] != grid[x+1 " " y " " z]){\
+        print x+0.5 " " y-0.5 " " z-0.5 " " 0.5*(grid[x " " y " " z]+grid[x+1 " " y " " z]);\
+        print x+0.5 " " y+0.5 " " z-0.5 " " 0.5*(grid[x " " y " " z]+grid[x+1 " " y " " z]);\
+        print x+0.5 " " y-0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x+1 " " y " " z]);\
+        print x+0.5 " " y+0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x+1 " " y " " z]);\
+        print "\n";\
+        print "\n";\
+      }\
+      if(grid[x " " y " " z] != grid[x " " y+1 " " z]){\
+        print x-0.5 " " y+0.5 " " z-0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y+1 " " z]);\
+        print x-0.5 " " y+0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y+1 " " z]);\
+        print x+0.5 " " y+0.5 " " z-0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y+1 " " z]);\
+        print x+0.5 " " y+0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y+1 " " z]);\
+        print "\n";\
+        print "\n";\
+      }\
+      if(grid[x " " y " " z] != grid[x " " y " " z+1]){\
+        print x-0.5 " " y-0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y " " z+1]);\
+        print x-0.5 " " y+0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y " " z+1]);\
+        print x+0.5 " " y-0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y " " z+1]);\
+        print x+0.5 " " y+0.5 " " z+0.5 " " 0.5*(grid[x " " y " " z]+grid[x " " y " " z+1]);\
+        print "\n";\
+        print "\n";\
+      }\
+     }\
+    }\
+  }\
+ }'

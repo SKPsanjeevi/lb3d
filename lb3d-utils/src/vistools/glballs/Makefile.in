@@ -1,0 +1,32 @@
+@SET_MAKE@
+
+DIRS = T D src
+
+all: stamp-h Makefile Makefile.config
+	$(RM) make.all
+	for i in $(DIRS); do $(MAKE) -C $$i all 2>&1 | tee -a make.all; done
+clean: Makefile
+	$(RM) make.clean
+	for i in $(DIRS); do $(MAKE) -C $$i clean 2>&1 | tee -a make.clean; done
+distclean: Makefile
+	$(RM) make.distclean
+	for i in $(DIRS) tools doc; do $(MAKE) -C $$i distclean 2>&1 | tee -a make.distclean; done
+	$(RM) config.cache config.log config.h make.all make.install make.clean make.distclean make.doc stamp-h gmon.out
+
+@srcdir@/configure : @srcdir@/configure.in
+	cd @srcdir@ && autoconf
+
+@srcdir@/config.h.in : @srcdir@/stamp-h.in
+@srcdir@/stamp-h.in: @srcdir@/configure.in
+#	cd @srcdir@ && autoheader
+	date > @srcdir@/stamp-h.in
+
+config.h: stamp-h
+stamp-h: @srcdir@/config.h.in config.status
+	./config.status
+
+Makefile Makefile.config: @srcdir@/stamp-h.in @srcdir@/config.h.in @srcdir@/Makefile.in @srcdir@/Makefile.config.in config.status
+	./config.status
+
+config.status: @srcdir@/configure
+	./config.status --recheck

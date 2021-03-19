@@ -1,0 +1,22 @@
+ LIBS	= -lm -lnsl $(CLIBS)
+# XLIBS	= -lXm -lXt -lXext -lX11 -lm
+ #CFLAGS = -s
+ #CFLAGS  =  -n32  -O2  -mips4  -OPT:Olimit=0
+ #CFLAGS  =  -64 -O3  -mips4 -OPT:Olimit=0
+ #CFLAGS= -O6 -mpentiumpro -pipe -malign-functions=2 -malign-loops=2 -malign-jumps=2 -DANSIC
+ #CFLAGS = -ggdb3 -pedantic #-Wall
+# CFLAGS = -g -pedantic
+ OBJ	= main.o help.o tools.o caller.o read_data.o decode_FLOAT.o decode_hdf.o plinteg.o misc.o extrema.o
+ SRC	= main.c help.c tools.c caller.c read_data.c decode_FLOAT.c decode_hdf.c plinteg.c misc.c extrema.c
+ TARGET	= sigma
+
+ .c.o:  ; ${CC}  -c ${CFLAGS} $*.c $(LIBS)
+
+# lgas:	Makefile $(OBJ)
+#	${CC}  $(CFLAGS) $(OBJ) -o $(TARGET) $(LIBS)
+ sigma:	Makefile $(SRC)
+	${CC}  $(CFLAGS) $(SRC) -o $(TARGET) $(LIBS)
+
+ clean: 
+	rm -f *.o *.s *~ $(TARGET) 
+

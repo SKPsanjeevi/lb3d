@@ -1,0 +1,91 @@
+
+ Centre for Computational Science
+ Chemistry Dept
+ Queen Mary, University of London
+ London E1 4NS
+
+
+	User Guide for the Lattice-Boltzmann "lb3d" code
+	       Binary Immiscible Numerical Test
+
+
+The test consists in calculating the surface tension on two systems:
+ (1) a planar interface between two immiscible fluids, and (2) a
+ similar interface but containing surfactant molecules adsorbed at it
+ as an initial condition.   
+
+Two input files are provided to start the simulations of cases (1) and
+ (2) above:
+
+ input-file1
+ input-file2
+
+ Each of them sets up two planar interfaces perpendicular to
+ axis Z, one at z=0 and other at z=NZ/2, on a lattice of size NX x NY
+ x NZ, where NX=16, NY=16, NZ=128. The lattice length along Z is
+ larger than the other two allows for enough space for the dynamics to
+ relax to isotropy at regions far enough from the interfaces. The
+ simulations run for 1000 time steps and dump output data files to
+ disk every 10.
+
+The code (`./lbe`) assumes that the input file is in the same directory
+ where the former is (./), and that two directories have been created
+ afresh by the user:
+
+ ../output/pl_tst_NS
+ ../output/pl_tst_S
+
+ corresponding to input-file1 and input-file2, respectively.
+
+Once the simulation finishes and the bunch of (output XDR) files are
+ produced, please perform the compilation:
+
+	./Post_planar/make
+
+ which produces an executable named `./Post_planar/sigma`. This is a
+ code used to postprocess the files 'p??_*_t??????.xdr' produced by
+ `lb3d`, where the first wildcard group stands for any of: 'xx', 'xy',
+ 'yy', 'xz', 'yz', 'zz'; the second is the string 'gr_out_file' read
+ from the input file ('pl_tst_NS' or 'pl_tst_S'), and the last if the
+ time step. Please run it with the -h flag to learn about the command 
+ arguments it takes. The output of `./Post_planar/sigma` is two
+ files, e.g.:
+
+	pressprep_pl_tst_S.dat
+	sigma_pl_tst_S.dat
+
+  The first file contains pressure tensor data and the second contains
+  three columns: 
+
+	[ts]  [surf]  [incr]
+
+  where [ts] is the time step, [surf] is the surface tension, and
+  [incr] is how much larger is [surf] (in %) with respect to the
+  previous time step.
+
+
+			  >>>IMPORTANT<<<
+
+  The benchmark that this test entails comes in when we look at the
+  last line of the second file. For example: 
+
+       % tail -1 sigma_pl_tst_S.dat
+       1000          0.00237867              0.51501612
+
+  which, in the example, means that at time step 1000 the surface
+  tension of the planar interface reached the value 0.00237867
+  (force/length) and is 0.52% larger than it was at the previous time
+  step. 
+
+  The example .dat files in this directory have been created using
+  input-file1 on a dual processor Linux PC.
+
+
+
+
+					Nelido Gonzalez-Segredo
+					CCS, Chemistry Dept, QMUL
+					n.gonzalez-segredo@qmul.ac.uk
+					26 Oct 02 
+
+

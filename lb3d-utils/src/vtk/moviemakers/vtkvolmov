@@ -1,0 +1,238 @@
+#!/usr/local/bin/vtk
+######!/usr/local/vtk-4.4-swrender/bin/vtk
+######!/usr/bin/vtk
+#
+# Change the first line for software rendering or the standard way with a
+# window. For software rendering, make sure that your LD_LIBRARY_PATH has
+# /usr/local/vtk-4.4-swrender/lib/vtk and
+# /usr/local/vtk-4.4-swrender/lib/MesaGL at the begining.
+#
+# Colors, windows size, etc have to be set somewhere down in this script.
+#
+# Jens, 01.03.07
+
+proc make_imageshift {d_min d_max} {
+  imageShift SetShift [expr -1*$d_min]
+  imageShift SetScale [expr 255.0/($d_max - $d_min)]
+  imageShift SetOutputScalarTypeToUnsignedChar
+  imageShift SetInput [reader GetOutput]
+  imageShift Modified
+}
+
+proc init_volume {} {
+global opacity_step_start
+global opacity_step_stop
+global red_stop
+global blue_start
+global threads
+
+# Set the range for the slider - I think GetScalarRange
+# returns a list.
+set range [[reader GetOutput] GetScalarRange]
+set data_min [lindex $range 0]
+set data_max [lindex $range 1]
+
+vtkImageShiftScale imageShift
+make_imageshift $data_min $data_max
+
+# Opacity transfer function
+vtkPiecewiseFunction opacityTFunc
+  opacityTFunc AddPoint 0 0.0
+  opacityTFunc AddPoint $opacity_step_start 0.0
+  opacityTFunc AddPoint $opacity_step_stop  1.0
+  opacityTFunc AddPoint 255 1.0
+
+# Create the mapping from scalar value to colour
+
+vtkColorTransferFunction colorTFunc
+  colorTFunc AddRGBPoint 0.0         1 0 0
+  colorTFunc AddRGBPoint $red_stop   1 0 0
+  colorTFunc AddRGBPoint $blue_start 0 0 1
+  colorTFunc AddRGBPoint 255         0 0 1
+
+# Create the properties of the volume
+vtkVolumeProperty volumeProperty
+  volumeProperty SetColor colorTFunc 
+  volumeProperty SetScalarOpacity opacityTFunc
+  volumeProperty ShadeOn
+
+# Use tri-linear rather than NN interpolation to improve image quality
+  volumeProperty SetInterpolationTypeToLinear
+
+# Create objects specific to volumetric ray casting
+vtkVolumeRayCastCompositeFunction compositeFunction
+  
+vtkVolumeRayCastMapper volumeMapper
+  volumeMapper SetVolumeRayCastFunction compositeFunction
+  
+# Parameters to improve resolution
+#  set dist volumeMapper GetSampleDistance
+  volumeMapper SetSampleDistance 0.1
+
+  volumeMapper SetNumberOfThreads $threads
+  set nThreads [volumeMapper GetNumberOfThreads]
+  puts [format "VolumeRayCastMapper is using %d threads" $nThreads]
+
+# Set input of volume mapper
+  volumeMapper SetInput [imageShift GetOutput]
+
+# Create the volume
+vtkVolume volume
+  volume SetMapper volumeMapper
+  volume SetProperty volumeProperty
+
+# Add the volume mapper to the scene
+ren1 AddProp volume
+
+}
+
+proc make_outline {} {
+	vtkOutlineFilter outline
+	outline SetInput [reader GetOutput]
+	vtkPolyDataMapper outlineMapper
+	outlineMapper SetInput [outline GetOutput]
+	vtkActor outlineActor
+	outlineActor SetMapper outlineMapper
+	set outlineProp [outlineActor GetProperty]
+	eval $outlineProp SetColor 0 0 0
+	ren1 AddActor outlineActor
+}
+
+proc make_initrot {} {
+    global azimuth
+    global elevation
+    global zoom
+    [ren1 GetActiveCamera] Azimuth  $azimuth
+    [ren1 GetActiveCamera] Elevation $elevation
+    [ren1 GetActiveCamera] Zoom $zoom
+    [ren1 GetActiveCamera] Modified
+
+}
+
+proc do_one_timestep {input_file} {
+
+   reader SetFileName $input_file
+   reader OpenVTKFile
+   reader Modified
+   reader Update
+   reader CloseVTKFile
+
+   [ren1 GetActiveCamera] Modified
+
+   set range [[reader GetOutput] GetScalarRange]
+   set data_min [lindex $range 0]
+   set data_max [lindex $range 1]
+
+#regexp {[0-9][0-9][0-9][0-9][0-9][0-9]} $input_file tmpstr
+#set tmpstr "T = $tmpstr"
+#set tmpstr " "
+#  textMapper SetInput $tmpstr
+
+  colorTFunc Modified
+
+  make_imageshift $data_min $data_max
+
+  volume Modified
+
+  renWin Render
+
+   toImage SetInput renWin
+   toImage Modified
+   imageWriter2 SetQuality 90
+   imageWriter2 SetInput [toImage GetOutput] 
+   imageWriter2 SetFileName $input_file.jpg
+   imageWriter2 Modified
+   imageWriter2 Write
+   regexp {[0-9][0-9][0-9][0-9][0-9][0-9]} $input_file tmpstr
+   set tmpstr "'t=$tmpstr'"
+   set cmdstring "/usr/bin/mogrify -font helvetica -fill blue -pointsize 20 -draw \"text 10,30 $tmpstr\" $input_file.jpg "
+#####   eval exec $cmdstring
+}
+
+######################################################################
+#set azimuth 90.0
+#set elevation 270.0
+#set zoom 1.4
+set threads 1 
+
+set azimuth 70.0
+set elevation 240.0
+set zoom 1.1
+
+#set red_stop   215
+#set old_red_stop   215
+#set blue_start 214
+#set old_blue_start 214
+
+#set red_stop   141
+#set old_red_stop   141
+#set blue_start 140
+#set old_blue_start 140
+
+set red_stop   121
+set old_red_stop   121
+set blue_start 120
+set old_blue_start 120
+
+#set opacity_step_start 215
+#set old_opacity_step_start 215
+#set opacity_step_stop 225
+#set old_opacity_step_stop 225
+
+#set opacity_step_start 160
+#set old_opacity_step_start 160
+#set opacity_step_stop 170
+#set old_opacity_step_stop 170
+
+set opacity_step_start 120
+set old_opacity_step_start 120
+set opacity_step_stop 130
+set old_opacity_step_stop 130
+######################################################################
+
+set input_file [lindex $argv 0]
+
+# Create the RenderWindow, Renderer and interactor
+vtkRenderer ren1
+ren1 SetBackground 1 1 1
+
+vtkRenderWindow renWin
+  renWin OffScreenRenderingOn
+
+  renWin AddRenderer ren1
+#  renWin SetSize 850 330
+  renWin SetSize 500 500
+
+# Necessary bits to save image to file
+vtkWindowToImageFilter toImage
+  toImage SetInput renWin
+vtkJPEGWriter imageWriter2
+  imageWriter2 SetQuality 90
+  imageWriter2 ProgressiveOn
+  imageWriter2 SetInput [toImage GetOutput] 
+
+set save_image_filename_prefix "image"
+set save_image_sequence_number 0
+
+# Init the reader for structured-points data
+vtkStructuredPointsReader reader
+  reader SetFileName $input_file
+  reader Update
+  reader CloseVTKFile
+
+init_volume
+make_outline
+make_initrot
+
+renWin Render
+
+set k 0
+for {set j 0} {$j < $argc} {incr j} {
+   puts  [lindex $argv $j]
+   set input_file [lindex $argv $j]
+   do_one_timestep $input_file
+}
+
+# prevent the tk window from showing up then start the event loop
+wm withdraw .
+exit

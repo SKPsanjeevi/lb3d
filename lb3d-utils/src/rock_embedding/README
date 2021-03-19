@@ -1,0 +1,6 @@
+Syntax: ./rock_embedding <source filename> <destination filename>
+
+rock_embedding will take an HDF5 file <filename> and increase the system size to add a square rock 'tube' around the system in a direction to be specified from stdin.
+The program will ask for axis (x/y/z), wall thickness, inlet/outlet size (one parameter!) and wettability of the rock used to embed the system in.
+A text file can be piped into the program for batch processing.
+

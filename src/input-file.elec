@@ -1,0 +1,7 @@
+&elec_input
+Q_colloid = 1.5
+Ex = 0.010
+Ey = 0.000
+Ez = 0.000
+D_therm = 0.01
+/

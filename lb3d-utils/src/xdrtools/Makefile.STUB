@@ -1,0 +1,106 @@
+
+# Note -lnsl does not work on some machines (e.g. Lemieux at PSC)
+#LIBS   = -lm -lnsl
+LIBS    = -lm
+
+
+ CFLAGSSGL =  -DSGL $(LOCALCFLAGS)
+ CFLAGSDBL = $(LOCALCFLAGS) 
+
+OBJ = hdfread.o hdfstats.o
+
+.c.o:  ; ${CC}  -c ${CFLAGS}  $(LOCALCFLAGS) $(HDF5FLAGS) ${INCL} $*.c $(LIBSHDF)
+
+all:	all_dbl all_sgl
+
+all_dbl:	cleanobj xdr2vtk_scalar_dbl xdr2vtk_vector_dbl \
+		xdr2vtk_2scalar_dbl xdrds2vtk_dbl\
+		xdrds_dbl xdrrave_dbl xdrmakecolour_dbl\
+		xdrstats_dbl xdrstats_full_dbl xmt2vtk\
+		colour2rock xdr2all_dbl rockxdr2all block channel
+		rm -f *.o 
+
+all_sgl:	cleanobj xdr2vtk_scalar_sgl xdr2vtk_2scalar_sgl \
+		xdr2vtk_vector_sgl xdrds2vtk_sgl xdrstats_full_sgl\
+		xdrds_sgl xdrrave_sgl xdrmakecolour_sgl xdrstats_sgl\
+		xdr2all_sgl
+		rm -f *.o 
+
+all_hdf:	hdf2xdr_sgl hdf2xdr_dbl hdf2xdr_vec_sgl hdf2xdr_vec_dbl\
+                hdf2vtk_vec_sgl hdf2vtk_vec_dbl hdfstats_sgl hdfstats_dbl
+
+ cleanobj:
+	rm -f *.o 
+
+ xdr2all_sgl:	xdr2all.c
+	${CC}  xdr2all.c -o xdr2all_sgl $(LIBS) $(CFLAGSSGL)
+ xdr2all_dbl:	xdr2all.c
+	${CC}  xdr2all.c -o xdr2all_dbl $(LIBS) $(CFLAGSDBL)
+ xdr2vtk_scalar_dbl:	xdr2vtk_scalar.c
+	${CC}  xdr2vtk_scalar.c -o xdr2vtk_scalar_dbl $(LIBS) $(CFLAGSDBL)
+ xdr2vtk_scalar_sgl:	xdr2vtk_scalar.c
+	${CC}  xdr2vtk_scalar.c -o xdr2vtk_scalar_sgl $(LIBS) $(CFLAGSSGL)
+ xdr2vtk_2scalar_dbl:	xdr2vtk_2scalar.c
+	${CC}  xdr2vtk_2scalar.c -o xdr2vtk_2scalar_dbl $(LIBS) $(CFLAGSDBL)
+ xdr2vtk_2scalar_sgl:	xdr2vtk_2scalar.c
+	${CC}  xdr2vtk_2scalar.c -o xdr2vtk_2scalar_sgl $(LIBS) $(CFLAGSSGL)
+ xdr2vtk_vector_dbl:	xdr2vtk_vector.c
+	${CC}  xdr2vtk_vector.c -o xdr2vtk_vector_dbl $(LIBS) $(CFLAGSDBL)
+ xdr2vtk_vector_sgl:	xdr2vtk_vector.c
+	${CC}  xdr2vtk_vector.c -o xdr2vtk_vector_sgl $(LIBS) $(CFLAGSSGL)
+ xdrds2vtk_dbl:	xdrds2vtk.c
+	${CC}  xdrds2vtk.c -o xdrds2vtk_dbl $(LIBS) $(CFLAGSDBL)
+ xdrds2vtk_sgl:	xdrds2vtk.c
+	${CC}  xdrds2vtk.c -o xdrds2vtk_sgl $(LIBS) $(CFLAGSSGL)
+ xdrds_dbl:	xdrds.c
+	${CC}  xdrds.c -o xdrds_dbl $(LIBS) $(CFLAGSDBL)
+ xdrds_sgl:	xdrds.c
+	${CC}  xdrds.c -o xdrds_sgl $(LIBS) $(CFLAGSSGL)
+ xdrstats_dbl:	xdrstats.c
+	${CC}  xdrstats.c -o xdrstats_dbl $(LIBS) $(CFLAGSDBL)
+ xdrstats_sgl:	xdrstats.c
+	${CC}  xdrstats.c -o xdrstats_sgl $(LIBS) $(CFLAGSSGL)
+ xdrstats_full_dbl:	xdrstats_full.c
+	${CC}  xdrstats_full.c -o xdrstats_full_dbl $(LIBS) $(CFLAGSDBL)
+ xdrstats_full_sgl:	xdrstats_full.c
+	${CC}  xdrstats_full.c -o xdrstats_full_sgl $(LIBS) $(CFLAGSSGL)
+ xmt2vtk:	xmt2vtk.c
+	${CC}  xmt2vtk.c -o xmt2vtk $(LIBS) $(CFLAGSDBL)
+ xdrrave_dbl:	xdrrave.c
+	${CC}  xdrrave.c -o xdrrave_dbl $(LIBS) $(CFLAGSDBL)
+ xdrrave_sgl:	xdrrave.c
+	${CC}  xdrrave.c -o xdrrave_sgl $(LIBS) $(CFLAGSSGL)
+ colour2rock:	colour2rock.c
+	${CC}  colour2rock.c -o colour2rock $(LIBS) $(CFLAGSDBL)
+ rockxdr2all:	rockxdr2all.c
+	${CC}  rockxdr2all.c -o rockxdr2all $(LIBS) $(CFLAGSDBL)
+ channel:	channel.c
+	${CC}  channel.c -o channel $(LIBS) $(CFLAGSDBL)
+ block:	block.c
+	${CC}  block.c -o block $(LIBS) $(CFLAGSDBL)
+ xdrmakecolour_dbl:	xdrmakecolour.c
+	${CC}  xdrmakecolour.c -o xdrmakecolour_dbl $(LIBS) $(CFLAGSDBL)
+ xdrmakecolour_sgl:	xdrmakecolour.c
+	${CC}  xdrmakecolour.c -o xdrmakecolour_sgl $(LIBS) $(CFLAGSSGL)
+ hdf2xdr_sgl:	hdf2xdr.c
+	$(CC)  $(CFLAGSSGL) $(HDF5FLAGS) $(LIBS) $(LDFLAGS) -o hdf2xdr_sgl hdf2xdr.c  $(LIBSHDF)  $(LIB)
+ hdf2xdr_dbl:	hdf2xdr.c
+	$(CC)  $(CFLAGSDBL) $(HDF5FLAGS) $(LIBS) $(LDFLAGS) -o hdf2xdr_dbl hdf2xdr.c  $(LIBSHDF)  $(LIB)
+ hdf2xdr_vec_sgl:	hdf2xdr_vec.c
+	$(CC)  $(CFLAGSSGL) $(HDF5FLAGS) $(LIBS) $(LDFLAGS) -o hdf2xdr_vec_sgl hdf2xdr_vec.c  $(LIBSHDF)  $(LIB)
+ hdf2xdr_vec_dbl:	hdf2xdr_vec.c
+	$(CC)  $(CFLAGSDBL) $(HDF5FLAGS) $(LIBS) $(LDFLAGS) -o hdf2xdr_vec_dbl hdf2xdr_vec.c  $(LIBSHDF)  $(LIB)
+ hdf2vtk_vec_sgl: hdf2vtk_vec.c
+	$(CC)  $(CFLAGSSGL) $(HDF5FLAGS) $(LIBS) $(LDFLAGS) -o hdf2vtk_vec_sgl hdf2vtk_vec.c  $(LIBSHDF)  $(LIB)
+ hdf2vtk_vec_dbl: hdf2vtk_vec.c
+	$(CC)  $(CFLAGSDBL) $(HDF5FLAGS) $(LIBS) $(LDFLAGS) -o hdf2vtk_vec_dbl hdf2vtk_vec.c  $(LIBSHDF)  $(LIB)
+ hdfstats_sgl:  $(OBJ)
+	${CC}  $(CFLAGSSGL) $(HDF5FLAGS) $(OBJ) -o hdfstats_sgl $(LIBSHDF) $(LIBS)
+ hdfstats_dbl:  $(OBJ)
+	${CC}  $(CFLAGSDBL) $(HDF5FLAGS) $(OBJ) -o hdfstats_dbl $(LIBSHDF) $(LIBS)
+
+ clean: 
+	rm -f *.o  *~ xdr2vtk_scalar_dbl xdr2vtk_scalar_sgl xdrds2vtk_dbl xdrds2vtk_sgl xdrds_dbl xdrds_sgl xdrstats_dbl xdrstats_sgl xdrstats_full_sgl xdrstats_full_dbl xmt2vtk xdrrave_sgl xdrrave_dbl xdr2vtk_vector_dbl xdr2vtk_vector_sgl xdr2vtk_2scalar_dbl xdr2vtk_2scalar_sgl colour2rock xdr2all_dbl xdr2all_sgl rockxdr2all block channel xdrmakecolour_dbl xdrmakecolour_sgl hdf2xdr_sgl hdf2xdr_dbl hdf2xdr_vec_sgl hdf2xdr_vec_dbl hdfstats_sgl hdfstats_dbl
+
+
+

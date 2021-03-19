@@ -1,0 +1,46 @@
+VTMP="lbe_version.tmp"
+VH="lbe_version.h"
+
+CPP=/usr/local/intel/11.1/046/bin/intel64/icpc
+
+all: version arr-to-velz check-minority check-values droplet-surfacetension droplet-deformation droplet-profiles droplet-tt
+
+arr-to-velz:
+	$(CPP) -g -o arr-to-velz hdf5_helper.cpp arr-to-velz.cpp -lhdf5  -I/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/include -L/usr/lo        cal/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib/
+
+check-minority:
+	$(CPP) -g -o check-minority hdf5_helper.cpp check-minority.cpp -lhdf5  -I/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/include -L/        usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib/
+
+check-values:
+	$(CPP) -g -o check-values hdf5_helper.cpp check-values.cpp -lhdf5  -I/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/include -L/usr/        local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib/
+
+droplet-surfacetension:
+	$(CPP) -g -o droplet-surfacetension hdf5_helper.cpp droplet-surfacetension.cpp -lhdf5 -Wall -wd981 -wd383 -I/usr/local/HDF5/hdf5-1.8.5-pat        ch1-linux-x86_64-shared/include -L/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib/ -wd193
+
+droplet-deformation:
+	$(CPP) -g -o droplet-deformation dsyevj3.cpp hdf5_helper.cpp droplet-deformation.cpp -lhdf5 -Wall -wd981 -wd383  -I/usr/local/HDF5/hdf5-1.        8.5-patch1-linux-x86_64-shared/include -L/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib/ -wd193 -wd1572
+
+droplet-profiles:
+	$(CPP) -g -o droplet-profiles hdf5_helper.cpp droplet-profiles.cpp -lhdf5 -Wall -wd981 -wd383 -I/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x8        6_64-shared/include -L/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib/ -wd193
+
+droplet-tt:
+	$(CPP) -g -o droplet-tt droplet-tt.cpp -Wall -wd981 -wd383 -wd193
+
+doxygen:
+	doxygen
+
+clean:
+	rm -f check-minority
+	rm -f check-values
+	rm -f droplet-surfacetension
+	rm -f droplet-deformation
+	rm -f droplet-profiles
+	rm -f *~
+	rm -rf doxygen
+	rm -f $(VH)
+
+version:
+	@./get-version.sh -c > $(VTMP)
+	@diff $(VTMP) $(VH) > /dev/null 2>&1 ; if [ $$? == 0 ] ; then rm -f $(VTMP) ; else echo "Creating new $(VH)"; mv $(VTMP) $(VH); fi
+	@echo "#define LBE_FLAGS \"$(DEFFLAGS) $(MAKEFFLAGS)\"" >> $(VH)
+

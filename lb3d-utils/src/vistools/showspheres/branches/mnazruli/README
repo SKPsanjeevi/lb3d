@@ -1,0 +1,33 @@
+Showspheres visualizes spheres with different colors and radii in 3D using VTK.
+
+The input files have 3-5 cols separated by tabs:
+x	y	z	radius	color
+
+Radius and color are optional (see options!)
+color is a float from 0 to 1 where 0 means red and 1 means blue.
+
+Defaults can be set in spheresdefaults.py
+
+
+
+# showspheres -help
+ Usage: shospheres FilesAndOptions
+ Files and options can be mixed. Options apply to all following files.
+ E.g. you can change the text during the movie.
+ Options (includeing the minus sign) can also appear in the data files.
+
+
+ Options are:
+  -color, -nocolor    Read color value between 0 and 1 from 5th column of input
+  -write -nowrite     Do or do not write jpegs of the images displayed
+  -fixedRadius
+  -nofixedradius      If nofiexedradisu is set, the radisu will be read from 
+                      the 4th column of the data file. Otherwie use -radius=
+  -radius=            Set radius if fixedradius is set.
+  -text=              Set the text that is displayed in the image
+  -delay=             Delay in seconds between images 
+
+
+Rudolf Weeber
+
+Wed May 16 14:07:56 CEST 2007

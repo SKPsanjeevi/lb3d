@@ -1,0 +1,9 @@
+usage:
+mkani2.py <list of simulation ids>
+The simulation id is the number after the timestep number.
+The script will read all other parametes from the file mkani_params in the same directory.
+It will create a directory named like the first simulation id, link all .asc belonging to the list of simulation ids into that directory and create .vtk files as well. Then it will render all frames and create a movie with mencoder.
+
+By specifying -fps=25 instead of a simulation id you can change the framerate of the final movie.
+
+The parameters that can be used in mkani_params are given in README.spheres_and_isosurf2

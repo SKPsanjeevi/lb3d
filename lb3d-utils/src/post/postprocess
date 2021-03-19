@@ -1,0 +1,696 @@
+#!/usr/bin/perl
+
+# Acme All-purpose BpostprocessorFH
+
+########################################################################
+# Parameters
+
+$bin2all = './bin2all';
+$all2xdr = './all2xdr';
+
+
+########################################################################
+# Subroutines
+
+# Parse an input-file.
+# Takes one parameter, the name of the file.
+# Returns a key-value hash.
+
+sub parse_input_file {
+	my %inputs = ();
+	my $infname = shift;
+
+	print "xyz $tnx $tny $tnz \n";
+
+	while(<INFILE>) {
+		# Ignore the namelist specifiers and blank lines.
+		if (!(/\&/) && !(/\//) && (/\S/) )
+		{
+			s/\s//g;	# Get rid of any whitespace.
+			split(/=/);
+			$inputs{@_[0]} = @_[1];
+		}
+	}
+	
+	close INFILE;
+
+	# Strip the stringquoting gubbins
+
+	foreach(keys(%inputs)) {
+		$inputs{$_} =~s/[\'\"]//g;
+	}
+
+	return %inputs
+}
+
+#
+#
+
+sub reassemble_vector {
+	my $prefix = shift;
+	my $t = shift;
+	my $suffix = shift;
+
+	my $stub = sprintf("%s%s_%s_t%06d",$path,$prefix,$grout,$t,$suffix);
+	my $relstub = sprintf("%s_%s_t%06d",$prefix,$grout,$t,$suffix);
+
+	my $x=0;
+	my $y=0;
+	my $z=0;
+	my $ox=0;
+	my $oy=0;
+	my $oz=0;
+
+	my @a = ();
+	my $outfile=$stub.".xdr";
+	my $fldfile=$stub.".fld";
+
+	my $buffer = "";
+
+	for $cpu (0..$nprocs-1) {
+
+
+		$ox = $nx * $ccoords[$cpu][0];
+		$oy = $ny * $ccoords[$cpu][1];
+		$oz = $nz * $ccoords[$cpu][2];
+
+	# Construct the name of the file to be read from.
+		
+		my $infile=$stub.sprintf('_p%04d%s',$cpu,$suffix);
+
+		print "Reading from \"$infile\"\n";
+	# Now spawn bin2all, telling it the name of the file, and
+	# the subdomain size.
+
+
+		open(INPIPE,"$bin2all $nx $ny $nz $ox $oy $oz vector $infile |")
+			or die ("Unable to launch $bin2all");
+
+		while (<INPIPE>) {
+			if (/\S/) {
+				chomp;		# Strip newlines.
+				s/^\s*//;	# Strip leading whitespace.
+				s/\s+/ /g;	# Strip repeated whitespace.
+
+				($x, $y, $z, $buffer) = split(/\s/,$_,4);
+	
+				$a[$x][$y][$z]=$buffer;
+			}
+		}
+
+		close INPIPE;
+
+	} # Loop over CPUs
+
+	# Write the complete XDR output.
+
+	open(OUTPIPE,"| $all2xdr $tnx $tny $tnz 0 0 0 vector $outfile")
+		or die("Unable to launch $all2xdr");
+
+	for $x(1..$tnx) {
+	 for $y(1..$tny) {
+	  for $z(1..$tnz) {
+		print OUTPIPE "$x $y $z ",$a[$x][$y][$z],"\n";
+	  }
+	 }
+	}
+	close OUTPIPE;
+	print "Wrote \"$outfile\" \n";
+
+	# Write a field file as well.
+	
+	$outfile = $relstub.".xdr";
+
+	open (FIELD,">$fldfile") or die ("Unable to open $fldfile");
+	print FIELD "# AVS\n";
+	print FIELD "ndim = 3\n";
+	print FIELD "dim1 = ",$tnx,"\n";
+	print FIELD "dim2 = ",$tny,"\n";
+	print FIELD "dim3 = ",$tnz,"\n";
+	print FIELD "nspace = 3\n";
+	print FIELD "veclen = 3\n";
+	print FIELD "data = xdr_double\n";
+	print FIELD "field = uniform\n";
+	print FIELD 
+		"variable 1 file=$outfile filetype=binary skip=0 stride=3\n";
+	print FIELD 
+		"variable 2 file=$outfile filetype=binary skip=8 stride=3\n";
+	print FIELD 
+		"variable 3 file=$outfile filetype=binary skip=16 stride=3\n";
+	close(FIELD);
+	print "Wrote field file $fldfile\n";
+}
+
+sub reassemble_nscalar {
+	my $veclen = shift;
+	my $prefix = shift;
+	my $t = shift;
+	my $suffix = shift;
+
+	my $type = ( ($veclen == 1) ? "scalar" : $veclen."scalar" );
+
+	my $stub = sprintf("%s%s_%s_t%06d",$path,$prefix,$grout,$t,$suffix);
+	my $relstub = sprintf("%s_%s_t%06d",$prefix,$grout,$t,$suffix);
+
+	my $x=0;
+	my $y=0;
+	my $z=0;
+	my $ox=0;
+	my $oy=0;
+	my $oz=0;
+
+	my @a = ();
+	my $outfile=$stub.".xdr";
+	my $fldfile=$stub.".fld";
+
+	my $buffer = "";
+
+	for $cpu (0..$nprocs-1) {
+
+
+		$ox = $nx * $ccoords[$cpu][0];
+		$oy = $ny * $ccoords[$cpu][1];
+		$oz = $nz * $ccoords[$cpu][2];
+
+	# Construct the name of the file to be read from.
+		
+		my $infile=$stub.sprintf('_p%04d%s',$cpu,$suffix);
+
+		print "Reading from \"$infile\"\n";
+	# Now spawn bin2all, telling it the name of the file, and
+	# the subdomain size.
+
+
+		open(INPIPE,"$bin2all $nx $ny $nz $ox $oy $oz $type $infile |")
+			or die ("Unable to launch $bin2all");
+
+		while (<INPIPE>) {
+			if (/\S/) {
+				chomp;		# Strip newlines.
+				s/^\s*//;	# Strip leading whitespace.
+				s/\s+/ /g;	# Strip repeated whitespace.
+
+				($x, $y, $z, $buffer) = split(/\s/,$_,4);
+	
+				$a[$x][$y][$z]=$buffer;
+			}
+		}
+
+		close INPIPE;
+
+	} # Loop over CPUs
+
+	# Write the complete XDR output.
+
+	print "| $all2xdr $tnx $tny $tnz 0 0 0 $type $outfile\n";
+	open(OUTPIPE,"| $all2xdr $tnx $tny $tnz 0 0 0 $type $outfile")
+		or die("Unable to launch $all2xdr");
+
+	for $x(1..$tnx) {
+	 for $y(1..$tny) {
+	  for $z(1..$tnz) {
+		print OUTPIPE "$x $y $z ",$a[$x][$y][$z],"\n";
+	  }
+	 }
+	}
+	close OUTPIPE;
+	print "Wrote \"$outfile\" \n";
+
+	# Write a field file as well.
+	
+	$outfile = $relstub.".xdr";
+
+	open (FIELD,">$fldfile") or die ("Unable to open $fldfile");
+	print FIELD "# AVS\n";
+	print FIELD "ndim = 3\n";
+	print FIELD "dim1 = ",$tnx,"\n";
+	print FIELD "dim2 = ",$tny,"\n";
+	print FIELD "dim3 = ",$tnz,"\n";
+	print FIELD "nspace = 3\n";
+	print FIELD "veclen = $veclen\n";
+	print FIELD "data = xdr_double\n";
+	print FIELD "field = uniform\n";
+	for (1..$veclen) {
+		my $skip = ($_-1)*8;	# xdr_double is 8 bytes long.
+
+		print FIELD "variable $_ file=$outfile filetype=binary ",
+				"skip=$skip stride=$veclen\n";
+	}
+	close(FIELD);
+	print "Wrote field file $fldfile\n";
+
+}
+
+########################################################################
+# These routines are used to convert the output data from taskfarming
+# mode.
+
+sub taskfarm_nscalar {
+	my $veclen = shift;
+	my $prefix = shift;
+	my $t = shift;
+	my $suffix = shift;
+
+	my $type = ( ($veclen == 1) ? "scalar" : $veclen."scalar" );
+
+	my $stub = sprintf("%s%s_%s_t%06d_p%04d",
+		$path,$prefix,$grout,$t,$mycpu);
+
+	my $relstub = sprintf("%s_%s_t%06d_p%04d",$prefix,$grout,$t,$mycpu);
+
+	my $x=0;
+	my $y=0;
+	my $z=0;
+
+	my @a = ();
+	my $outfile=$stub.".xdr";
+	my $fldfile=$stub.".fld";
+
+	my $buffer = "";
+
+	# Construct the name of the file to be read from.
+		
+	my $infile=$stub.$suffix;
+
+	print "Reading from \"$infile\"\n";
+
+	print "Launching $bin2all $nx $ny $nz 0 0 0 $type $infile \n";
+	open(INPIPE,"$bin2all $nx $ny $nz 0 0 0 $type $infile |")
+		or die ("Unable to launch $bin2all");
+
+	while (<INPIPE>) {
+		if (/\S/) {
+			chomp;		# Strip newlines.
+			s/^\s*//;	# Strip leading whitespace.
+			s/\s+/ /g;	# Strip repeated whitespace.
+
+			if (/rror/) {print $_."\n"; $NaNerror=1;}
+			if (/NaN/) {$NaNerror=1;}
+			($x, $y, $z, $buffer) = split(/\s/,$_,4);
+
+			$a[$x][$y][$z]=$buffer;
+		}
+	}
+
+	close INPIPE;
+
+	# Write the XDR output.
+
+	if ($NaNerror==1) {
+		print "Problem with this file - skipping\n";
+		$NaNerror=0;
+	} else {
+	open(OUTPIPE,"| $all2xdr $tnx $tny $tnz 0 0 0 $type $outfile")
+		or die("Unable to launch $all2xdr");
+
+	for $x(1..$tnx) {
+	 for $y(1..$tny) {
+	  for $z(1..$tnz) {
+		print OUTPIPE "$x $y $z ",$a[$x][$y][$z],"\n";
+	  }
+	 }
+	}
+	close OUTPIPE;
+	print "Wrote \"$outfile\" \n";
+
+	# Write a field file as well.
+	
+	$outfile = $relstub.".xdr";
+
+	open (FIELD,">$fldfile") or die ("Unable to open $fldfile");
+	print FIELD "# AVS\n";
+	print FIELD "ndim = 3\n";
+	print FIELD "dim1 = ",$tnx,"\n";
+	print FIELD "dim2 = ",$tny,"\n";
+	print FIELD "dim3 = ",$tnz,"\n";
+	print FIELD "nspace = 3\n";
+	print FIELD "veclen = $veclen\n";
+	print FIELD "data = xdr_double\n";
+	print FIELD "field = uniform\n";
+	for (1..$veclen) {
+		my $skip = ($_-1)*8;	# xdr_double is 8 bytes long.
+
+		print FIELD "variable $_ file=$outfile filetype=binary ",
+				"skip=$skip stride=$veclen\n";
+	}
+	close(FIELD);
+	print "Wrote field file $fldfile\n";
+
+	}
+
+}
+
+sub taskfarm_vector {
+	my $prefix = shift;
+	my $t = shift;
+	my $suffix = shift;
+
+	my $stub = sprintf("%s%s_%s_t%06d_p%04d",
+		$path,$prefix,$grout,$t,$mycpu);
+	my $relstub = sprintf("%s_%s_t%06d_p%04d",$prefix,$grout,$t,$mycpu);
+
+	my $x=0;
+	my $y=0;
+	my $z=0;
+	my $ox=0;
+	my $oy=0;
+	my $oz=0;
+
+	my @a = ();
+	my $outfile=$stub.".xdr";
+	my $fldfile=$stub.".fld";
+
+	my $buffer = "";
+
+	# Construct the name of the file to be read from.
+		
+	my $infile=$stub.$suffix;
+
+	print "Reading from \"$infile\"\n";
+	# Now spawn bin2all, telling it the name of the file, and
+	# the subdomain size.
+
+
+	open(INPIPE,"$bin2all $nx $ny $nz 0 0 0 vector $infile |")
+		or die ("Unable to launch $bin2all");
+
+	while (<INPIPE>) {
+		if (/\S/) {
+			chomp;		# Strip newlines.
+			s/^\s*//;	# Strip leading whitespace.
+			s/\s+/ /g;	# Strip repeated whitespace.
+
+			($x, $y, $z, $buffer) = split(/\s/,$_,4);
+
+			$a[$x][$y][$z]=$buffer;
+		}
+	}
+
+	close INPIPE;
+
+	# Write the XDR output.
+
+	open(OUTPIPE,"| $all2xdr $tnx $tny $tnz 0 0 0 vector $outfile")
+		or die("Unable to launch $all2xdr");
+
+	for $x(1..$tnx) {
+	 for $y(1..$tny) {
+	  for $z(1..$tnz) {
+		print OUTPIPE "$x $y $z ",$a[$x][$y][$z],"\n";
+	  }
+	 }
+	}
+	close OUTPIPE;
+	print "Wrote \"$outfile\" \n";
+
+	# Write a field file as well.
+	
+	$outfile = $relstub.".xdr";
+
+	open (FIELD,">$fldfile") or die ("Unable to open $fldfile");
+	print FIELD "# AVS\n";
+	print FIELD "ndim = 3\n";
+	print FIELD "dim1 = ",$tnx,"\n";
+	print FIELD "dim2 = ",$tny,"\n";
+	print FIELD "dim3 = ",$tnz,"\n";
+	print FIELD "nspace = 3\n";
+	print FIELD "veclen = 3\n";
+	print FIELD "data = xdr_double\n";
+	print FIELD "field = uniform\n";
+	print FIELD 
+		"variable 1 file=$outfile filetype=binary skip=0 stride=3\n";
+	print FIELD 
+		"variable 2 file=$outfile filetype=binary skip=8 stride=3\n";
+	print FIELD 
+		"variable 3 file=$outfile filetype=binary skip=16 stride=3\n";
+	close(FIELD);
+	print "Wrote field file $fldfile\n";
+}
+
+########################################################################
+# Now, the code itself.
+
+my $true = (0==0);
+my $false = (1==0);
+$nprocs = 0;
+
+my $taskfarming = $false;
+
+while(defined(my $arg=shift)) {
+	if (($arg eq "--taskfarm") or ($arg eq "-t")) {
+		$taskfarming=$true;
+	}
+	if (($arg eq "--nprocs") or ($arg eq "-n")) {
+		$nprocs = shift;
+	}
+}
+
+if ($taskfarming) {
+	#############################################################
+	# Taskfarming version:- for each cpu, read ".input-fileXXXX",
+	# which points to the input file for that processor. Then
+	# for each timestep, convert the (single) output of each kind
+	# for that processor to XDR format.
+
+	die("Must specify number of CPUs: postprocess -n <ncpus>")
+		unless ($nprocs != 0);
+	
+	for $mycpu (0..$nprocs-1) {
+
+	#############################################################
+	# Open .input-file, and find out where the input file is.
+
+		open(INFILE,sprintf(".input-file%04d",$mycpu))
+			or die ("Cannot open .input-file");
+
+		my $infilename=<INFILE>;# Fetch the appropriate input-file name.
+		$infilename=~s/\s//g;	# Strip whitespace
+
+		close(INFILE);
+
+	#############################################################
+	# Now open the input file proper, and parse it.
+
+		open (INFILE,$infilename) 
+		or die ("Can't open input-file \"$infilename\".");
+
+		printf "Opened \"$infilename\"\n";
+
+		my %inputs = parse_input_file($infilename);
+
+		die ("Require folder to be defined")
+			unless defined $inputs{'folder'};
+		die ("Require gr_out_file to be defined")
+			unless defined $inputs{'gr_out_file'};
+
+		$path = "../output/".$inputs{'folder'}."/";
+	
+		die ("Require nx, ny, and nz to be defined") unless 
+			(  ( defined $inputs{'nx'} )
+			&& ( defined $inputs{'ny'} )
+			&& ( defined $inputs{'nz'} ) );
+
+		$tnx = $inputs{'nx'};
+		$tny = $inputs{'ny'};
+		$tnz = $inputs{'nz'};
+		($nx,$ny,$nz) = ($tnx, $tny,$tnz);
+
+		$grout = $inputs{'gr_out_file'};
+
+		$do_int_p= ($inputs{'sci_int'}=~/true/i);
+		$do_sur_p= ($inputs{'sci_sur'}=~/true/i);
+		$do_owd_p= ($inputs{'sci_owd'}=~/true/i);
+		$do_dir_p= ($inputs{'sci_dir'}=~/true/i);
+		$do_arr_p= ($inputs{'sci_arrows'}=~/true/i);
+		$do_vel_p= ($inputs{'sci_vel'}=~/true/i);
+		$do_flo_p= ($inputs{'sci_flo'}=~/true/i);
+
+	# Set up dummy coords set.
+
+		$ccoords[$n][0] = ($nxcpus = $x);
+		$ccoords[$n][1] = ($nycpus = $y);
+		$ccoords[$n][2] = ($nzcpus = $z);
+
+	#############################################################
+	# Loop over the required number of timesteps.
+	# Every n_sci steps, process the required science output.
+
+		for ($t=0;$t<=$inputs{'n_iteration'};$t+=$inputs{'n_sci'}) {
+	
+			print "t=$t\n";
+			if ($do_int_p) {
+				taskfarm_nscalar(1,"colour",$t,".bin");
+			}
+			if ($do_sur_p) {
+				taskfarm_nscalar(1,"sur",$t,".bin");
+			}
+			if ($do_vel_p) {
+				taskfarm_nscalar(1,"vel",$t,".bin");
+			}
+			if ($do_owd_p) {
+				taskfarm_nscalar(2,"owd",$t,".bin");
+			}
+			if ($do_dir_p) {
+				taskfarm_vector("dir",$t,".bin");
+			}
+			if ($do_arr_p) {
+				taskfarm_vector("arr",$t,".bin");
+			}
+			if ($do_flo_p) {
+				taskfarm_nscalar(3,"flo",$t,".bin");
+			}
+	
+	
+		} # Loop over timesteps.
+
+	} # Loop over CPUs.
+
+} else {
+
+	#############################################################
+	# Non-taskfarming version:- read ".input-file", which points
+	# to ".input-file". For each timestep, tie together the
+	# data from each CPU and write out in XDR format.
+
+	#############################################################
+	# Open .input-file, and find out where the input file is.
+
+	open(INFILE,".input-file") or die ("Cannot open .input-file");
+	my $infilename=<INFILE>;# Fetch the appropriate input-file name.
+	$infilename=~s/\s//g;	# Strip whitespace
+	close(INFILE);
+
+	
+	#############################################################
+	# Now open the input file proper, and parse it.
+
+	open (INFILE,$infilename) 
+	or die ("Can't open input-file \"$infilename\".");
+
+	printf "Opened \"$infilename\"\n";
+
+	my %inputs = parse_input_file($infilename);
+
+	# Uncomment to show the input parms
+	
+	#foreach(keys(%inputs)) {
+	#	print $_," = \"",$inputs{$_},"\"\n";
+	#}
+
+	die ("Require folder to be defined") unless defined $inputs{'folder'};
+	die ("Require gr_out_file to be defined") unless defined
+		$inputs{'gr_out_file'};
+
+	$path = "../output/".$inputs{'folder'}."/";
+
+	die ("Require nx, ny, and nz to be defined") unless 
+		(  ( defined $inputs{'nx'} )
+		&& ( defined $inputs{'ny'} )
+		&& ( defined $inputs{'nz'} ) );
+
+	$tnx = $inputs{'nx'};
+	$tny = $inputs{'ny'};
+	$tnz = $inputs{'nz'};
+	$grout = $inputs{'gr_out_file'};
+
+	$do_int_p= ($inputs{'sci_int'}=~/true/i);
+	$do_sur_p= ($inputs{'sci_sur'}=~/true/i);
+	$do_owd_p= ($inputs{'sci_owd'}=~/true/i);
+	$do_dir_p= ($inputs{'sci_dir'}=~/true/i);
+	$do_arr_p= ($inputs{'sci_arrows'}=~/true/i);
+	$do_vel_p= ($inputs{'sci_vel'}=~/true/i);
+	$do_flo_p= ($inputs{'sci_flo'}=~/true/i);
+
+	#############################################################
+	# Read the processors' coordinates in the virtual topology.
+	# These go into the ccoords(nprocs,3) array.
+	
+	@ccoords = ();
+	
+	$coordfilename = $path."coords_".$inputs{'gr_out_file'};
+
+
+	open(COORD,$coordfilename) or die ("Cannot open $coordfilename");
+
+		# Read the first line. This will contain the
+		# highest processor rank, so it will tell us how
+		# many CPUs are involved.
+
+		$_=<COORD>;
+		($n, $x,$y,$z) = split;
+		$nprocs=$n+1;
+
+		# Now write its position data into the array.
+
+		$ccoords[$n][0] = ($nxcpus = $x);
+		$ccoords[$n][1] = ($nycpus = $y);
+		$ccoords[$n][2] = ($nzcpus = $z);
+
+
+
+	# Read the rest of them in.
+
+	while(<COORD>) {
+		($n, $x,$y,$z) = split;
+		$ccoords[$n][0] = $x;
+		$ccoords[$n][1] = $y;
+		$ccoords[$n][2] = $z;
+		$nxcpus = ( $x > $nxcpus ? $x : $nxcpus ) ; 
+		$nycpus = ( $y > $nycpus ? $y : $nycpus ) ; 
+		$nzcpus = ( $z > $nzcpus ? $z : $nzcpus ) ; 
+	}
+	close(COORD);
+
+	$nxcpus = $nxcpus + 1;
+	$nycpus = $nycpus + 1;
+	$nzcpus = $nzcpus + 1;
+	print "CPUs: $nxcpus $nycpus $nzcpus \n";
+		
+	# Uncomment to see the processor topology
+#	for (0..$nprocs-1) {
+#		print "Rank $_ at ",
+#			$ccoords[$_][0]," ",
+#			$ccoords[$_][1]," ",
+#			$ccoords[$_][2],"\n";
+#	}
+
+	$nx = $tnx / $nxcpus;
+	$ny = $tny / $nycpus;
+	$nz = $tnz / $nzcpus;
+
+
+	#############################################################
+	# Loop over the required number of timesteps.
+	# Every n_sci steps, process the required science output.
+
+	for ($t=0;$t<=$inputs{'n_iteration'};$t+=$inputs{'n_sci'}) {
+
+		print "t=$t\n";
+		if ($do_int_p) {
+			reassemble_nscalar(1,"colour",$t,".bin");
+		}
+		if ($do_sur_p) {
+			reassemble_nscalar(1,"sur",$t,".bin");
+		}
+		if ($do_vel_p) {
+			reassemble_nscalar(1,"vel",$t,".bin");
+		}
+		if ($do_owd_p) {
+			reassemble_nscalar(2,"owd",$t,".bin");
+		}
+		if ($do_dir_p) {
+			reassemble_vector("dir",$t,".bin");
+		}
+		if ($do_arr_p) {
+			reassemble_vector("arr",$t,".bin");
+		}
+		if ($do_flo_p) {
+			reassemble_nscalar(3,"flo",$t,".bin");
+		}
+
+
+	}
+
+}
+
+	printf ("%c Done!\n",7);

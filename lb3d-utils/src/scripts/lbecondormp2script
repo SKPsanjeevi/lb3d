@@ -1,0 +1,77 @@
+#!/bin/bash
+
+####################################################################
+#
+# This is the shell script started by Condor in order to launch lbe 
+# as an MPI job. Some variables might have to be changed if versions 
+# of installed software change.
+#
+# Jens, 24.10.07
+#
+####################################################################
+
+# You might have to place the path to the proper version of the Intel
+# libraries here.
+export LD_LIBRARY_PATH=/usr/local64/intel/fce/9.1.040/lib:/usr/local64/lib:$LD_LIBRARY_PATH
+
+# Set this to the bin directory of MPICH installation
+MPDIR=/usr/local64/bin
+PATH=$MPDIR:.:/usr/local/bin:/usr/local64/condor/bin:$PATH
+export PATH
+
+# we get those from Condor:
+cd $INITDIR
+_CONDOR_PROCNO=$_CONDOR_PROCNO
+_CONDOR_NPROCS=$_CONDOR_NPROCS
+
+
+hostname=`/bin/hostname`
+currentDir=`pwd`
+user=`/usr/bin/whoami`
+export HOME="/home/$user"
+
+# If not the head node, just sleep forever, to let the
+# sshds run
+if [ $_CONDOR_PROCNO -ne 0 ]
+then
+		wait
+
+		exit 0
+fi
+
+# We got the name of the excutable from Condor.
+EXECUTABLE=$1
+shift
+
+# Run the actual mpijob and make sure mpd runs. If at some point we want
+# to run on clusters or at least multiple machines, these lines have to be
+# changed and a machine file has to be provided.
+echo Starting mpdboot 
+echo "MPD_SECRETWORD=blabla" >$HOME/.mpd.conf
+chmod 600 $HOME/.mpd.conf
+#mpdboot --file=machines --rsh=$CONDOR_SSH --totalnum=1 --verbose --ncpus=$_CONDOR_NPROCS
+#mpdboot --file=machines --rsh=ssh --totalnum=1 --verbose --ncpus=$_CONDOR_NPROCS --verbose
+mpd --daemon
+sleep 3
+echo Starting mpiexec
+
+# Check for checkpoint files and restart automatically if there are some:
+FOLDER=`cat $INPUTFILE |grep folder|sed s/"folder = '"//|sed s/"'"//`
+echo data folder is $FOLDER
+NUMCHECKPOINTS=`ls $FOLDER/checkparams*|wc -l`
+echo NUMCHECKPOINTS: $NUMCHECKPOINTS 
+
+# If there are no checkpoints, start from t=0.
+if [ $NUMCHECKPOINTS -eq 0 ] ; then
+	mpiexec -n $_CONDOR_NPROCS $EXECUTABLE -f $INPUTFILE
+else
+# If we found some checkpoints, restart from the last one.
+	RESTORE=`ls -tr $FOLDER/checkparams*|tail -1| \
+   sed 's/.*t\([0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\).*/\1/'`
+	echo Restarting from checkpoint $RESTORE
+	mpiexec -n $_CONDOR_NPROCS $EXECUTABLE -f $INPUTFILE -r $RESTORE
+fi
+
+#rm -f machines
+
+exit $?

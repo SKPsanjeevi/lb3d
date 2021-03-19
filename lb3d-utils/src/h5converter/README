@@ -1,0 +1,13 @@
+Syntax: ./h5converter <inputfile> [-hdf5] [-xdr] [-noflip / -cfflip / -flip <n>]
+
+h5converter takes a path to a file <inputfile> as its only required argument. If it contains .xdr it's treated as an xdr file, while .h5 is treated as HDF5.
+If the -xdr flag is set, an XDR file is written. If -hdf5 is set, an HDF5 file is written. 
+If -noflip is set, the array is not changed, -cfflip changes C-style arrays to Fortran-style or vice-versa, fior -flip <n>, look at the code. If none are specified, 
+the option is read from stdin at runtime.
+Other options are read from stdin and can be put into a text file and piped into the program for batch jobs.
+
+For an XDR file, you need to specify the dimensions by hand (because this information is not contained within the file format). It is assumed the XDR file contains floats.
+For an HDF5 file, you need to specify the dataset name (for LB3D usually 'OutArray'), and the dimensions will be read from the dataset automatically.
+
+The output file(s) will then be written to <inputfile>-out.[h5/xdr].
+

@@ -1,0 +1,17 @@
+#!/usr/sbin/perl
+
+my $outfile = shift;
+my $nx=shift;
+my $ny=shift;
+my $nz=shift;
+my $ox = shift;
+
+open (OUTFILE,">$outfile") or die ("Unable to open $outfile");
+
+for my $z ( 1..$nz ) {
+	for my $y ( 1..$ny ) {
+			print OUTFILE "$ox $y $z 1\n";
+	}
+}
+
+close OUTFILE;

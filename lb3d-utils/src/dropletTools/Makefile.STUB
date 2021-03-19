@@ -1,0 +1,49 @@
+LIBS    = -lm $(CLIBS) 
+
+CFLAGS = $(LOCALCFLAGS)
+
+.c.o:  ; ${CC}  -c ${CFLAGS} ${INCL} $*.c $(LIBS)
+
+all:	huangCA mechSigRadCA contact color capCA capSigma capSigmaY capLapSig capTheoZ hdfMinMax dropRad sumDens geoCA mechSigCA hdfCut hdfCutGleSurf 
+
+# lgas:	getContactAngle.o hdfread.o
+#	${CC}  $(CFLAGS) $(OBJ) -o $(TARGET) $(LIBS)
+hdftest: 	hdfFunctions.c
+	${CC} $(CFLAGS)	hdfTest.c hdfFunctions.c -o hdfTest $(LIBS)
+contact:	getContactAngle.c hdfFunctions.c
+	${CC} $(CFLAGS)	getContactAngle.c hdfFunctions.c -o getContactAngle $(LIBS)
+geoCA:		getGeometricalCA.c hdfFunctions.c
+	${CC} $(CFLAGS)	getGeometricalCA.c hdfFunctions.c -o getGeometricalCA $(LIBS)
+mechSigCA:	getMechSigmaCA.c hdfFunctions.c
+	${CC} $(CFLAGS)	getMechSigmaCA.c hdfFunctions.c -o getMechSigmaCA $(LIBS)
+mechSigRadCA:	getMechSigmaRadialCA.c hdfFunctions.c
+	${CC} $(CFLAGS)	getMechSigmaRadialCA.c hdfFunctions.c -o getMechSigmaRadialCA $(LIBS)
+huangCA:	getHuangCA.c hdfFunctions.c
+	${CC} $(CFLAGS)	getHuangCA.c hdfFunctions.c -o getHuangCA $(LIBS)
+sumDens:	getInitDens.c hdfFunctions.c
+	${CC} $(CFLAGS)	getInitDens.c hdfFunctions.c -o getInitDens $(LIBS)
+dropRad:	getDropletBaseRadius.c hdfFunctions.c
+	${CC} $(CFLAGS)	getDropletBaseRadius.c hdfFunctions.c -o getDropletBaseRadius $(LIBS)
+color:		getZeroColourZ.c hdfread.c
+	${CC}  $(CFLAGS) getZeroColourZ.c hdfFunctions.c -o getZeroColourZ  $(LIBS)
+isoColor:	getIsoColourZ.c hdfread.c
+	${CC}  $(CFLAGS) getIsoColourZ.c hdfFunctions.c -o getIsoColourZ  $(LIBS)
+capCA:		getCapillaryCA.c hdfFunctions.c
+	${CC}  $(CFLAGS) getCapillaryCA.c hdfFunctions.c -o getCapillaryCA  $(LIBS)
+capSigma:	getCapillarySigma.c hdfFunctions.c
+	${CC}  $(CFLAGS) getCapillarySigma.c hdfFunctions.c -o getCapillarySigma  $(LIBS)
+capSigmaY:	getCapillarySigmaY.c hdfFunctions.c	
+	${CC}  $(CFLAGS) getCapillarySigmaY.c hdfFunctions.c -o getCapillarySigmaY  $(LIBS)
+capLapSig:	getCapillaryLaplaceSigma.c hdfFunctions.c
+	${CC}  $(CFLAGS) getCapillaryLaplaceSigma.c hdfFunctions.c -o getCapillaryLaplaceSigma  $(LIBS)
+capTheoZ:	getCapillaryTheoZ.c hdfFunctions.c
+	${CC}  $(CFLAGS) getCapillaryTheoZ.c hdfFunctions.c -o getCapillaryTheoZ  $(LIBS)
+hdfMinMax:	getMinMax.c hdfFunctions.c
+	${CC}  $(CFLAGS) getMinMax.c hdfFunctions.c -o getMinMax  $(LIBS)
+hdfCut: 	hdfCut.c hdfFunctions.c 
+	${CC}  $(CFLAGS) hdfCut.c hdfFunctions.c -o hdfCut  $(LIBS)
+hdfCutGleSurf: 	hdfCutGleSurf.c hdfFunctions.c 
+	${CC}  $(CFLAGS) hdfCutGleSurf.c hdfFunctions.c -o hdfCutGleSurf  $(LIBS)
+clean: 
+	rm -f *.o *.s *~ hdfTest getContactAngle getGeometricalCA getMechSigmaCA getMechSigmaRadialCA getHuangCA getInitDens getDropletBaseRadius getZeroColourZ getIsoColourZ getCapillaryCA getCapillarySigma getCapillarySigmaY getCapillaryLaplaceSigma getCapillaryTheoZ getCapillaryTheoZ32 getMinMax hdfCut hdfCutGleSurf
+

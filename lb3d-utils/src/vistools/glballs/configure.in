@@ -1,0 +1,153 @@
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT(T/T.h)
+AC_CONFIG_HEADER(config.h)
+
+dnl Checks for programs.
+AC_PROG_CXX(g++ c++ cxx KCC CC icc)
+AC_PROG_MAKE_SET
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_LANG(C++)
+
+dnl Checks for header files.
+AC_HEADER_STDC
+
+dnl Checks for typedefs, structures, and compiler characteristics.
+AC_C_INLINE
+ACX_C_RESTRICT
+
+dnl Checks for library functions.
+AC_CHECK_FUNCS(asprintf)
+AC_CHECK_FUNCS(snprintf)
+
+AC_CHECK_HEADERS(cmath,[],[
+dnl AC_CHECK_FUNCS(acos)
+AC_CHECK_FUNCS(acosf)
+dnl AC_CHECK_FUNCS(ceil)
+AC_CHECK_FUNCS(ceilf)
+dnl AC_CHECK_FUNCS(cos)
+AC_CHECK_FUNCS(cosf)
+dnl AC_CHECK_FUNCS(fabs)
+AC_CHECK_FUNCS(fabsf)
+dnl AC_CHECK_FUNCS(floor)
+AC_CHECK_FUNCS(floorf)
+dnl AC_CHECK_FUNCS(log)
+AC_CHECK_FUNCS(logf)
+dnl AC_CHECK_FUNCS(log10)
+AC_CHECK_FUNCS(log10f)
+dnl AC_CHECK_FUNCS(sin)
+AC_CHECK_FUNCS(sinf)
+dnl AC_CHECK_FUNCS(sqrt)
+AC_CHECK_FUNCS(sqrtf)
+])
+
+AC_CHECK_SIZEOF(unsigned short int)
+AC_CHECK_SIZEOF(unsigned int)
+AC_CHECK_SIZEOF(short int)
+AC_CHECK_SIZEOF(int)
+AC_CHECK_SIZEOF(long int)
+AC_CHECK_SIZEOF(long long int)
+AC_CHECK_SIZEOF(float)
+AC_CHECK_SIZEOF(double)
+AC_CHECK_SIZEOF(long double)
+AC_C_BIGENDIAN
+
+dnl parameters
+
+dnl check for config
+dnl ========================
+
+AC_ARG_WITH(config,
+ AC_HELP_STRING([--with-config\[=hostname\]],[local configuration]),
+ [
+  if test -f "$srcdir/CONFIG/$withval" ; then
+   T_WITH_CONFIG=$withval 
+  else
+   echo "config $withval not found"
+   exit
+  fi
+ ],[ 
+  if test -f "$srcdir/CONFIG/$(hostname)" ; then
+   T_WITH_CONFIG=$(hostname)
+  else
+   if test -f "$srcdir/CONFIG/$CXX" ; then
+    T_WITH_CONFIG=$CXX
+   else
+    echo "no valid default config found"
+    exit
+   fi
+  fi 
+ ]
+)
+AC_SUBST(T_WITH_CONFIG)
+dnl ========================
+
+dnl Debugging Mode
+dnl ========================
+AC_ARG_ENABLE(debug,
+ AC_HELP_STRING([--enable-debug],[debugging messages (default no)]),
+ T_ENABLE_DEBUG=$enableval,T_ENABLE_DEBUG=no
+)
+AC_SUBST(T_ENABLE_DEBUG)
+dnl ========================
+
+dnl searching for memory leaks
+dnl ========================
+AC_ARG_ENABLE(memoryleak,
+ AC_HELP_STRING([--enable-memoryleak],[searching for memory leaks (default no)]),
+ T_ENABLE_MEMORYLEAK=$enableval,T_ENABLE_MEMORYLEAK=no
+)
+AC_SUBST(T_ENABLE_MEMORYLEAK)
+if test "x$T_ENABLE_MEMORYLEAK" = "xyes" ; then
+AC_DEFINE(T_ENABLE_MACROSMEMLEAK_C,,[searching for memoryleak via malloc/free/strdup])
+AC_DEFINE(T_ENABLE_MACROSMEMLEAK_CC,,[searching for memoryleak via new/delete])
+fi
+dnl ========================
+
+
+dnl export C for math
+dnl ========================
+AC_ARG_ENABLE(mathexportc,
+ AC_HELP_STRING([--enable-mathexportc],[need export "C" {} around math.h (default no)]),
+ T_WITH_MATH_EXPORTC=$enableval,T_WITH_MATH_EXPORTC=no
+)
+if test "x$T_WITH_MATH_EXPORTC" = "xyes" ; then
+AC_DEFINE(T_WITH_MATH_EXPORTC,,[need export "C" {} around math.h])
+fi
+dnl ========================
+
+AC_ARG_WITH(qtdir,
+ AC_HELP_STRING([--with-qtdir=path],[local qt directory]),
+ [
+  if test -d "$withval" ; then
+   D_WITH_QTDIR=$withval 
+  else
+   echo "directory $withval not found"
+   exit
+  fi
+ ],[ 
+  if test -d "$QTDIR" ; then
+   D_WITH_QTDIR=$QTDIR
+  fi
+ ]
+)
+AC_SUBST(D_WITH_QTDIR)
+dnl ========================
+
+
+AC_OUTPUT(Makefile\
+ Makefile.config\
+ T/Makefile\
+ D/Makefile\
+ src/Makefile\
+ stamp-h,date > stamp-h) 
+
+echo
+echo " general options"
+echo " ---------------"
+
+echo "  - debugging mode                                : $T_ENABLE_DEBUG"
+echo "  - local configuration                           : $T_WITH_CONFIG"
+echo "  - searching for memory leaks                    : $T_ENABLE_MEMORYLEAK"
+echo "  - base directory for qt                         : $D_WITH_QTDIR"
+echo

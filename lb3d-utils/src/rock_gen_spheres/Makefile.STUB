@@ -1,0 +1,5 @@
+all:
+	/usr/local/bin/mpicxx -o rock_gen_spheres rock_gen_spheres.cpp -I/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/include -L/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib -lhdf5
+
+clean:
+	rm -f rock_gen_spheres

@@ -1,0 +1,11 @@
+Usage: ./omniani.py <filestring> [-fps=n] [-zstep=n -zmax=n]
+
+Omniani tries to make a movie of all files colour_*.vtk with <filestring> in the filename.
+The file omniani.params contains the parameters to be passed to omnirender.py
+
+If you specify the -zstep=n parameter, Omniani will render the data in slices of zstep, up to zmax (you must specify zmax
+at the Omniani command line, not in the params file).
+You also need to specify the xmax and ymax parameters in the params file, otherwise OmniRender will not work.
+
+Omniani will not overwrite existing png files - delete them manually if you want to have everything rendered afresh.
+

@@ -1,0 +1,7 @@
+-norockdata
+-elevation=15.0
+-azimuth=30.0
+-volumeopacitylow=0.5
+-volumeopacityhigh=0.8
+-noisosurface
+-nospheres

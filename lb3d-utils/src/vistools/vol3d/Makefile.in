@@ -1,0 +1,107 @@
+SHELL = /bin/sh
+CC = @CC@
+RM = rm
+
+CFLAGS = @CFLAGS@ @CPPFLAGS@
+LDFLAGS = @LDFLAGS@
+
+HDF5_LDFLAGS = @HDF5_LDFLAGS@
+HDF5_CFLAGS = @HDF5_CFLAGS@
+HDF5_LIBS = @HDF5_LIBS@
+
+PNG_LDFLAGS = @PNG_LDFLAGS@
+PNG_CFLAGS = @PNG_CFLAGS@
+PNG_LIBS = @PNG_LIBS@
+
+FFTW_CFLAGS = @FFTW_CFLAGS@
+FFTW_LDFLAGS = @FFTW_LDFLAGS@
+FFTW_LIBS = @FFTW_LIBS@
+
+GLUT_CFLAGS = @GLUT_CFLAGS@
+GLUT_LDFLAGS = @GLUT_LDFLAGS@
+GLUT_LIBS = @GLUT_LIBS@
+
+VOL2D_CFLAGS = $(FFTW_CFLAGS)
+VOL2D_LIBS = $(PNG_LIBS) $(FFTW_LIBS)
+VOL2D_LDFLAGS = $(FFTW_LDFLAGS)
+
+VOL3D_CFLAGS = $(HDF5_CFLAGS) $(VOL2D_CFLAGS)
+VOL3D_LIBS = -lm $(HDF5_LIBS) $(VOL2D_LIBS)
+VOL3D_LDFLAGS = $(HDF5_LDFLAGS) $(VOL2D_LDFLAGS)
+
+VOLUTIL_CFLAGS = $(CFLAGS) $(VOL3D_CFLAGS)
+VOLUTIL_LDFLAGS = $(LDFLAGS) $(VOL3D_LDFLAGS)
+VOLUTIL_LIBS = $(VOL3D_LIBS)
+VOLUTIL_LINK = $(VOLUTIL_LDFLAGS) $(VOLUTIL_LIBS)
+
+GI_CFLAGS = $(CFLAGS)  $(VOL3D_CFLAGS) $(GLUT_CFLAGS) 
+GI_LDFLAGS = $(LDFLAGS) $(VOL3D_LDFLAGS) $(GLUT_LDFLAGS) 
+GI_LIBS = $(VOL3D_LIBS) $(GLUT_LIBS) 
+GI_LINK = $(GI_LDFLAGS) $(GI_LIBS)
+
+PNGFFT_CFLAGS = $(CFLAGS) $(VOL2D_CFLAGS) $(FFTW_CFLAGS) 
+PNGFFT_LDFLAGS = $(LDFLAGS) $(VOL2D_LDFLAGS) $(FFTW_LDFLAGS) 
+PNGFFT_LIBS = $(VOL2D_LIBS)  $(FFTW_LIBS)
+PNGFFT_LINK = $(PNGFFT_LDFLAGS) $(PNGFFT_LIBS) 
+
+
+GROWARR_SRC = growarr.c
+VOL2D_SRC = vol2d.c vol2df.c vol2du8.c binnery.c
+VOL3D_SRC = vol3d.c vol3df.c isosurface.c mcubes_tables.c vector.c $(VOL2D_SRC) $(GROWARR_SRC)
+
+BINARIES = volutil @COMPILE_GI@ @COMPILE_VR@ @COMPILE_PNGFFT@ @COMPILE_2DSF@ iso genus surfcalc surfmeasure 
+
+all: $(BINARIES)
+
+volutil: volutil.c $(VOL3D_SRC)
+	$(CC) $(VOLUTIL_CFLAGS) -o $@ volutil.c $(VOL3D_SRC) $(VOLUTIL_LINK)
+
+gi: glutiso.c dirscan.c screenshot.c quat.c $(VOL3D_SRC)
+	$(CC) $(GI_CFLAGS) $(CFLAGS) -o $@ glutiso.c dirscan.c screenshot.c quat.c $(VOL3D_SRC) $(GI_LINK)
+
+vr: volRenderer.c volRender.c glutViewer.c lutWidget.c quat.c winReg.c adjFloatList.c screenshot.c dirscan.c $(VOL3D_SRC)
+	$(CC) $(GI_CFLAGS) $(CFLAGS) -o $@ volRenderer.c volRender.c glutViewer.c quat.c winReg.c lutWidget.c adjFloatList.c screenshot.c dirscan.c $(VOL3D_SRC) $(GI_LINK)
+
+vp: volParticles.c volRender.c glutViewer.c lutWidget.c quat.c winReg.c adjFloatList.c screenshot.c dirscan.c $(VOL3D_SRC)
+	$(CC) $(GI_CFLAGS) $(CFLAGS) -o $@ volParticles.c volRender.c glutViewer.c quat.c winReg.c lutWidget.c adjFloatList.c screenshot.c dirscan.c $(VOL3D_SRC) $(GI_LINK)
+
+orient: orient.c glutViewer.c quat.c winReg.c vector.c
+	$(CC) $(GI_CFLAGS) $(CFLAGS) -o $@ orient.c glutViewer.c quat.c vector.c winReg.c -lglut -lm
+
+quantize: quantize.c lutWidget.c winReg.c $(VOL3D_SRC)
+	$(CC) $(GI_CFLAGS) $(CFLAGS) -o $@ quantize.c lutWidget.c winReg.c $(VOL3D_SRC) $(GI_LINK)
+
+iso: isomain.c  $(VOL3D_SRC)
+	$(CC) $(CFLAGS) -o $@ isomain.c $(VOL3D_SRC) $(GI_LINK) 
+
+genus: genus.c $(VOL3D_SRC)
+	$(CC) $(CFLAGS) -o $@ genus.c $(VOL3D_SRC) $(GI_LINK) 
+
+surfinfo: surfinfo.c $(VOL3D_SRC)
+	$(CC) $(CFLAGS) -o $@ surfinfo.c $(VOL3D_SRC) $(GI_LINK) 
+
+surfcalc: surfcalc.c  $(VOL3D_SRC)
+	$(CC) $(CFLAGS) -o $@ surfcalc.c $(VOL3D_SRC) $(GI_LINK) 
+
+surfmeasure: surfmeasure.c  $(VOL3D_SRC)
+	$(CC) $(CFLAGS) -o $@ surfmeasure.c $(VOL3D_SRC) $(GI_LINK) 
+
+pngfft: pngfft.c $(VOL2D_SRC)
+	$(CC) $(CFLAGS) -o $@ pngfft.c $(VOL2D_SRC) $(PNGFFT_LINK)
+
+2dsf: 2dsf.c $(VOL2D_SRC)
+	$(CC) $(CFLAGS) -o $@ 2dsf.c $(VOL2D_SRC) $(PNGFFT_LINK)
+
+dirscan.o: dirscan.c
+	$(CC) $(CFLAGS) -c -o $@ dirscan.c
+
+clean:
+	$(RM) -rf $(BINARIES) *.o
+
+cclean:
+	$(RM) -rf volutil gi pngfft *.o Makefile config.log config.status \
+		autom4te.cache config.h
+
+acclean:
+	$(RM) -rf volutil gi pngfft *.o Makefile config.log config.status \
+		autom4te.cache config.h configure

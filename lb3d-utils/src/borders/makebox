@@ -1,0 +1,30 @@
+#!/usr/sbin/perl
+
+my $outfile = shift;
+my $nx=shift;
+my $ny=shift;
+my $nz=shift;
+
+open (OUTFILE,">$outfile") or die ("Unable to open $outfile");
+
+for my $z (1..$nz) {
+	for my $y (1..$ny) {
+		print OUTFILE "1 $y $z 1\n";
+		print OUTFILE "$nx $y $z 1\n";
+	}
+}
+
+for my $y (1..$ny) {
+	for my $x (1..$nx) {
+		print OUTFILE "$x $y 1 1\n";
+		print OUTFILE "$x $y $nz 1\n";
+	}
+}
+
+for my $z (1..$nz) {
+	for my $x (1..$nx) {
+		print OUTFILE "$x 1 $z 1\n";
+		print OUTFILE "$x $ny $z 1\n";
+	}
+}
+close OUTFILE;

@@ -1,0 +1,30 @@
+#!/bin/ksh
+#PBS -l walltime=0:04:00
+#PBS -l rmsnodes=16:64
+#PBS -j oe
+#PBS -m abe
+
+# lb3d can now be compiled with -DLEMIEUX which checks for the
+# setting of $LOCAL and writes the checkpoint files there. 
+# checkparams still goes into the data directory.
+
+set + 
+
+export SCRATCH=/usr/scratch/7/harting
+#execute program
+
+#export LD_LIBRARY_PATH=/usr/local/packages/gcc-3.2.2/lib:/usr/users/7/harting/lib:/usr/local/packages/libxml2/lib:$LD_LIBRARY_PATH
+
+#$HOME/lbe/utils/ftools/testgetenv
+
+mkdir -p $SCRATCH/testlbe
+cp $HOME/lbe/code/lbe $SCRATCH/testlbe/
+cp $HOME/lbe/code/input-file $SCRATCH/testlbe/
+cp $HOME/lbe/code/.input-file $SCRATCH/testlbe/
+
+cd $SCRATCH/testlbe
+echo blastart > testout
+prun -N ${RMS_NODES} -n ${RMS_PROCS} -vvv  ./lbe
+
+/usr/psc/bin/tcscp '{compute}:$LOCAL/*.xdr' $SCRATCH/testlbe/
+echo blaende >> testout

@@ -1,0 +1,48 @@
+
+This is the glballs by Martin Strauss, a visualization tool using OpenGL and QT
+
+The program uses autoconf to guess your system configuration. (see ./configure --help)
+
+try 
+./configure
+make
+
+To build the program on a platform you might have to go to the CONFIG directory, 
+and prepare a configuration file.
+
+then, try 
+configure
+make
+
+if this fails, try
+
+make distclean
+rm configure
+make configure
+./configure
+make
+
+if this still fails, consider changing the configuration file
+
+if you still have no success, have a look at the config.log
+and as a last solution see the .in files, maybe you have to change something there)
+
+when the compilation was successful, you have a file src/glballs
+which you can execute, or copy it to some bin-directory, if you like
+
+
+The file you are reading has been added afterwards by Martin Hecht to assist you when
+trying to compile the program. I have also modified in some detals of the
+configure scripts. My changes to make the program compile on the SUSE 64
+bit installations were the following: 
+
+- changed the occurences of "lib" to "lib64" in Makefile.config.in
+- removed the -march=i686 option from CONFIG/g++ OPTFLAGS
+- changed -lqt to -lqt-mt in src/Makefile.in
+- corrected the brackets in D/D_CGL.cc on line 312 and 316 according to
+  the suggestions of g++ v. 4.3.1 
+
+maybe you have to change the things back if you don't have yet a 64 bit
+architecture or if your installation did not introduce lib64 directories
+
+

@@ -1,0 +1,13 @@
+#!/bin/bash
+H5REPACK=/usr/local/bin/h5repack
+for i in $* ; do
+echo $i
+cd $i
+for j in *.h5 ; do
+nice -19 $H5REPACK -f GZIP=9 -f SHUF -i $j -o $j.$$
+if [ $? -eq 0 ] ; then
+	mv $j.$$ $j
+fi
+done
+cd ..
+done

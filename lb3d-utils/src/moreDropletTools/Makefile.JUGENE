@@ -1,0 +1,46 @@
+VTMP="lbe_version.tmp"
+VH="lbe_version.h"
+
+CPP=xlc++
+CFLAGS=-g
+HDF5=-lhdf5 -L/usr/local/hdf5/lib -I/usr/local/hdf5/include -lz -L/usr/local/zlib/lib -I/usr/local/zlib/include -lsz -L/usr/local/szip/lib -I/usr/local/szip/include
+
+all: version arr-to-velz check-minority check-values droplet-surfacetension droplet-deformation droplet-profiles droplet-tt
+
+arr-to-velz:
+	$(CPP) $(CFLAGS) -o arr-to-velz hdf5_helper.cpp arr-to-velz.cpp $(HDF5)
+
+check-values:
+	$(CPP) $(CFLAGS) -o check-values hdf5_helper.cpp check-values.cpp $(HDF5)
+
+check-minority:
+	$(CPP) $(CFLAGS) -o check-minority hdf5_helper.cpp check-minority.cpp $(HDF5)
+
+droplet-surfacetension:
+	$(CPP) $(CFLAGS) -o droplet-surfacetension hdf5_helper.cpp droplet-surfacetension.cpp $(HDF5)
+
+droplet-deformation:
+	$(CPP) $(CFLAGS) -o droplet-deformation hdf5_helper.cpp dsyevj3.cpp droplet-deformation.cpp $(HDF5)
+
+droplet-profiles:
+	$(CPP) $(CFLAGS) -o droplet-profiles hdf5_helper.cpp droplet-profiles.cpp $(HDF5)
+
+droplet-tt:
+	$(CPP) $(CFLAGS) -o droplet-tt droplet-tt.cpp
+clean:
+	rm -f arr-to-velz
+	rm -f check-minority
+	rm -f check-values
+	rm -f droplet-surfacetension
+	rm -f droplet-deformation
+	rm -f droplet-profiles
+	rm -f droplet-tt
+	rm -f *~
+	rm -rf doxygen
+	rm -f $(VH)
+
+version:
+	@./get-version.sh -c > $(VTMP)
+	@diff $(VTMP) $(VH) > /dev/null 2>&1 ; if [ $$? == 0 ] ; then rm -f $(VTMP) ; else echo "Creating new $(VH)"; mv $(VTMP) $(VH); fi
+	@echo "#define LBE_FLAGS \"$(DEFFLAGS) $(MAKEFFLAGS)\"" >> $(VH)
+

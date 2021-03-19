@@ -1,0 +1,54 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+#ifndef SINGLEFLUID
+!> Fills the restvec of the node (\c x \c y \c z) with colour if it is
+!> inside, but close to the edge of particle \c i
+subroutine update_edge_node(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout) :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+  integer :: k
+
+  real(kind=rk) :: surroundings(n_spec)
+  real(kind=rk) :: pc_current
+
+  ! Fill the restvec of the edges with the surrounding
+  ! colour in multicomponent case to balance forces
+  if (N(x,y,z)%rock_state==real(P(i)%uid,kind=rk)) then
+    if (near_particle_edge(P(i),px,py,pz,x,y,z)) then
+      call get_surroundings(N,x,y,z,surroundings)
+      call get_particle_colour(pc_current)
+      if (pc_current==0.0_rk) then
+        N(x,y,z)%n_r(restvec) = surroundings(1)
+        N(x,y,z)%n_b(restvec) = surroundings(2)
+#ifndef NOSURFACTANT
+        N(x,y,z)%n_s(restvec) = surroundings(3)
+#endif
+      else if (pc_current>0.0_rk) then
+        N(x,y,z)%n_r(restvec) = surroundings(1) + pc_current
+        N(x,y,z)%n_b(restvec) = surroundings(2)
+#ifndef NOSURFACTANT
+        N(x,y,z)%n_s(restvec) = surroundings(3)
+#endif
+      else
+        N(x,y,z)%n_r(restvec) = surroundings(1)
+        N(x,y,z)%n_b(restvec) = surroundings(2) - pc_current
+#ifndef NOSURFACTANT
+        N(x,y,z)%n_s(restvec) = surroundings(3)
+#endif
+      endif
+    endif
+  endif
+end subroutine update_edge_node
+#endif

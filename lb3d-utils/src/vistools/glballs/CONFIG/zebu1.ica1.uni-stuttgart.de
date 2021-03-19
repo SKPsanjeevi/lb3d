@@ -1,0 +1,14 @@
+CXX=g++
+
+ifdef T_ENABLE_DEBUG
+ OPTFLAGS = -O2 -Wall -g3 -DDEBUG -Werror
+else
+ OPTFLAGS = -O3 -ffast-math -fomit-frame-pointer -Wall -Werror -fno-exceptions -march=i686
+endif
+
+CXXVERSIONFLAG = --version
+
+MPI_CPPFLAGS=-I/local/mpich-1.2.2.3/include
+MPI_LDFLAGS=-L/local/mpich-1.2.2.3/lib -lmpich
+
+LOCAL_CPPFLAGS=

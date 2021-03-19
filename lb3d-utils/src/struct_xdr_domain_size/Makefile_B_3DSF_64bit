@@ -1,0 +1,29 @@
+.KEEP_STATE:
+.SUFFIXES: .c .f .o
+
+LIBS    = -lm
+LIBS2   = -lm -lhdf5 -I/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/include -L/usr/local/HDF5/hdf5-1.8.5-patch1-linux-x86_64-shared/lib/
+XLIBS   = -lXm -lXt -lXext -lX11 -lm
+CFLAGS  = -g -I/usr/local64/include -I/usr/local64/include -I/usr/local64/lib -I/usr/local64/lib
+CC      = /usr/local/intel/11.1/046/bin/intel64/icpc 
+OBJ     = main.o help.o tools.o caller_3DSF.o read_data.o decode.o fft_3DSF.o circ_avg_B.o domain_size_B.o dump_to_files.o sfmisc.o rlft3_d.o fourn_d.o
+OBJ2    = main.o help.o tools.o caller_3DSF.o read_data.o decode_HDF.o readhdfmain.o fft_3DSF.o circ_avg_B.o domain_size_B.o dump_to_files.o sfmisc.o rlft3_d.o fourn_d.o
+OBJ3    = main.o help.o tools.o caller.o read_data.o decode_HDF.o readhdfmain.o fft.o circ_avg_B.o domain_size_B.o xydomain_size_B.o dump_to_files.o sfmisc.o rlft3_d.o fourn_d.o
+TARGET  = struct_xdr3D.sgl
+TARGET2 = struct_hdf3D.sgl
+TARGET3 = struct_hdf.sgl
+
+.c.o:  ; ${CC}  -c ${CFLAGS} ${INCL} $*.c
+
+xdr:	$(OBJ)
+	${CC}  $(CFLAGS) $(OBJ) -o $(TARGET) $(LIBS)
+
+hdf:	$(OBJ2)
+	${CC}  $(CFLAGS) $(OBJ2) -o $(TARGET2) $(LIBS2)
+
+hdf2D:	$(OBJ3)
+	${CC}  $(CFLAGS) $(OBJ3) -o $(TARGET3) $(LIBS2)
+
+clean: 
+	rm -f *.o *.s *~ $(TARGET) $(TARGET2) $(TARGET3)
+

@@ -1,0 +1,17 @@
+#!/bin/bash
+#PBS -N HORNET_job
+#PBS -S /bin/bash
+#PBS -M first.lastname@your.site.edu
+#PBS -m abe
+#PBS -l nodes=2:ppn=24
+#PBS -l walltime=00:30:00
+# See 'man qsub' for a complete list
+
+# Use 'qsub <jobfile>' to submit.
+
+# Change to the direcotry that the job was submitted from
+cd $PBS_O_WORKDIR
+
+# Launch the parallel job to the allocated compute nodes
+
+aprun -n 32 -N 16 ./lbe -f input-file > $PBS_JOBNAME.$PBS_JOBID.out 2> $PBS_JOBNAME.$PBS_JOBID.err

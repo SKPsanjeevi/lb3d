@@ -1,0 +1,202 @@
+#!/bin/ksh
+# Creates a bunch of input files and nqs run scripts using nested loops.
+# Be aware that the input file strcture in future versions might change,
+# i.e., you might have to adapt this script.
+# Jens, 09.10.02
+
+# File/Dir variables
+
+CODEDIR=`pwd`
+INPUTDIR=$CODEDIR/input
+OUTDIR=$CODEDIR/../output
+PROJECT="gbs-0.006-gss-0.001"
+GROUT=bla
+
+# Run script paramters
+NP=32
+TL="8:00:00"
+RUNQUEUE=gnormal
+POSTQUEUE=normal
+
+# Fixed simulation parameters
+
+NX=64
+N_IT=10000
+
+FB_START=2
+FB_END=7
+FB_STEP=1
+
+FR=0
+
+FG_START=2
+FG_END=7
+FG_STEP=1
+
+################################################################
+#
+# Loops
+#
+################################################################
+
+mkdir -p $INPUTDIR
+mkdir -p $OUTDIR
+
+FB_TMP=$FB_START
+while [ $FB_TMP -le $FB_END ] ; do
+
+ FG_TMP=$FG_START
+ while [ $FG_TMP -le $FG_END ] ; do
+
+ FR_TMP=0
+
+FR=0.0
+FB=0.$FB_TMP
+FG=0.$FG_TMP
+
+INPUTPREFIX=$PROJECT'_nx'$NX'_it'$N_IT'_fr'$FR'fb'$FB'fg'$FG
+INPUTFILE=$INPUTPREFIX.in
+RUNFILE=$INPUTPREFIX.run
+POSTFILE=$INPUTPREFIX.post
+PROJECTDIR=$PROJECT'_fb'$FB'_fg'$FG
+OUTPREFIX='fb'$FB'_fg'$FG
+
+echo $INPUTPREFIX
+
+################################################################
+#  Create input file
+################################################################
+
+echo "Input file is "$INPUTFILE
+cat > $INPUTDIR/$INPUTFILE << EOF
+&fixed_input
+nx = $NX
+ny = $NX
+nz = $NX
+seed = 1
+obs_file = 'empty.dat'
+boundary_cond = 0
+/
+
+&variable_input
+n_iteration = $N_IT
+n_sci = 200
+sci_start = 0
+sci_int = .true.
+sci_sur = .true.
+n_sci_sur = 200
+sci_owd = .true.
+n_sci_owd = 200 
+sci_dir = .true.
+n_sci_dir = 200
+sci_vel = .false.
+n_sci_vel = 200
+sci_flo = .false.
+n_sci_flo = 200
+sci_arrows = .false.
+n_sci_arrows = 200
+sci_pressure = .false.
+n_sci_pressure = 200
+sci_pressure_init = 0
+post=.true.
+steer=.false.
+folder = '$PROJECTDIR'
+gr_out_file = '$OUTPREFIX'
+init_cond = 0
+fr = $FR
+fg = $FG
+fb = $FB
+fr1 = 15
+fr2 = 15
+inv_fluid = 0
+rock_colour = 0
+beta = 10.0
+/
+
+&lbe_input
+amass_b = 1.0
+amass_r = 1.0
+amass_s = 1.0
+tau_b = 1.0
+tau_r = 1.0
+tau_s = 1.0
+tau_d = 1.0
+g_br = 0.08
+g_bs = -0.006
+g_ss = -0.001
+d_0 = 1.0
+bdist = 0
+perturbation = 0
+shear_u = 0
+g_accn = 0
+checkpoint = 10000
+restore = 0
+psifunc = 2
+dump_format = 'xdr'
+write_AVS_fld = .true.
+dump_double = .true.
+/
+EOF
+
+################################################################
+#  Create run scripts
+################################################################
+
+JOBLABEL='Rb'$FB_TMP'g'$FG_TMP
+echo "Run script is "$RUNFILE
+cat > $INPUTDIR/$RUNFILE << EOF
+#!/bin/sh
+#QSUB -lt $TL
+#QSUB -eo
+#QSUB -l mpp_p=$NP
+#QSUB -q $RUNQUEUE
+#QSUB -r $JOBLABEL 
+#QSUB -me
+mkdir -p $OUTDIR/$PROJECTDIR
+cp $INPUTDIR/$INPUTFILE $OUTDIR/$PROJECTDIR/
+cp $INPUTDIR/$INPUTFILE $CODEDIR/
+cd $CODEDIR
+echo INTERACTIVE >.input-file
+date
+echo "$INPUTFILE"| mpirun -np $NP ./lbe
+rm -f $INPUTFILE
+mkdir -p $INPUTDIR/done
+mv $INPUTDIR/$RUNFILE $INPUTDIR/done/ 
+mv $INPUTDIR/$INPUTFILE $INPUTDIR/done/ 
+date
+EOF
+#qsub $INPUTDIR/$POSTFILE
+
+chmod a+x $INPUTDIR/$RUNFILE
+
+############# post ################
+#JOBLABEL='Pr'$FR_TMP'g'$FG_TMP
+#
+#echo "Script for postprocessing is "$POSTFILE
+#cat > $INPUTDIR/$POSTFILE <<EOF
+#!/bin/sh
+##QSUB -lt $TL
+##QSUB -eo
+##QSUB -l mpp_p=1
+##QSUB -q $POSTQUEUE
+##QSUB -r $JOBLABEL 
+#date
+#cp $INPUTDIR/$INPUTFILE $CODEDIR/
+#cd $CODEDIR
+#./post -f "$INPUTFILE"
+#rm -f $INPUTFILE
+#mkdir -p cp $INPUTDIR/done
+#mv $INPUTDIR/$INPUTFILE $INPUTDIR/done/ 
+#mv $INPUTDIR/$POSTFILE $INPUTDIR/done/ 
+#date
+#EOF
+#
+#chmod a+x $INPUTDIR/$POSTFILE
+
+###################################
+
+
+   let FG_TMP=$FG_TMP+$FG_STEP
+  done
+ let FB_TMP=$FB_TMP+$FB_STEP
+done

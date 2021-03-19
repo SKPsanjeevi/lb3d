@@ -1,0 +1,8 @@
+all:
+	mpic++ -DH5_C_HEADER -DH5_NO_NAMESPACE -g -o droplet-surfacetension.GROUCH hdf5_helper.cpp ellipse_fit.cpp droplet_fit.cpp droplet-surfacetension.cpp -lhdf5 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lmkl_intel_lp64 -I/opt/intel/Compiler/11.0/083/mkl/include -L/opt/intel/Compiler/11.0/083/mkl/lib/em64t -L/opt/hdf5-1.8.4-1-mpich2-1.2.1p1-intel11.1/lib -I/opt/hdf5-1.8.4-1-mpich2-1.2.1p1-intel11.1/include -lz
+	mpic++ -DNOPNG -DH5_C_HEADER -DH5_NO_NAMESPACE -g -o analyze_droplet.GROUCH hdf5_helper.cpp ellipse_fit.cpp droplet_fit.cpp analyze_droplet.cpp -lhdf5 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lmkl_intel_lp64 -I/opt/intel/Compiler/11.0/083/mkl/include -L/opt/intel/Compiler/11.0/083/mkl/lib/em64t -lz
+
+clean:
+	rm -f droplet-surfacetension.GROUCH
+	rm -f analyze_droplet.GROUCH
+	rm -f *~

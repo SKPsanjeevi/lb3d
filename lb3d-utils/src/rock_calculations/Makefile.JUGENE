@@ -1,0 +1,7 @@
+all:
+	xlc++ -O3 -qstrict -qhot -I/usr/local/hdf5/include rock_calculations.cpp -L/usr/local/hdf5/lib -lhdf5 -lhdf5_hl -L/usr/local/szip/v2.1/lib -L/usr/local/zlib/v1.2.3/lib -lsz -lz -o rock_calculations -DNOREPEAT -DH5_PARALLEL 
+
+clean:
+	rm -f rock_calculations
+
+

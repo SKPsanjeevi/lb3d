@@ -1,0 +1,67 @@
+&fixed_input
+nx = 16
+ny = 16
+nz = 16
+seed = 1
+obs_file = 'empty.dat'
+boundary_cond = 0
+/
+
+&variable_input
+n_iteration = 500000
+n_sci = 500
+sci_start = 0
+sci_int = .true.
+sci_sur = .false.
+n_sci_sur = 1000
+sci_owd = .false.
+n_sci_owd = 1000
+sci_dir = .false.
+n_sci_dir = 1000
+sci_vel = .false.
+n_sci_vel = 1000
+sci_flo = .false.
+n_sci_flo = 1000
+sci_arrows = .false.
+n_sci_arrows = 1000
+sci_pressure = .false.
+n_sci_pressure = 1000
+sci_pressure_init = 0
+post=.true.
+steer=.true.
+folder = './'
+gr_out_file = 'ahm'
+init_cond = 0
+fr = 0.7000
+fg = 0.00000
+fb = 0.70000
+fr1 = 15
+fr2 = 15
+inv_fluid = 0
+rock_colour = 0
+beta = 1.000000
+/
+
+&lbe_input
+amass_b = 1.0
+amass_r = 1.0
+amass_s = 1.0
+tau_b = 0.8
+tau_r = 0.8
+tau_s = 1.0
+tau_d = 1.0
+g_br = 0.03
+g_bs = -0.006
+g_ss = -0.003
+d_0 = 1
+bdist = 0
+perturbation = 0.01
+shear_u = 0.0
+g_accn = 0.0
+checkpoint = 500000
+restore = 0
+psifunc = 2
+dump_format = 'xdr'
+write_AVS_fld = .true.
+dump_double = .true.
+/

@@ -1,0 +1,49 @@
+
+surfacetool.cpp is a quite plain c++ code 
+to create the xdr output ("file.xdr") of a pattern 
+in terms of different wettabilities on a
+geometrically planar surface. 
+
+The output "file.xdr" is meant to be used as 
+an "obs_file" within jens harting 's lbe code, 
+e.g., to study wetting and fluid dynamics 
+on chemically patterned substrates.
+
+The patterning is created by means of the loops 
+starting in line 105.
+The parameters needed in order to create the pattern 
+are read from the inputfile "surfacetool.input".
+
+The present version of the code generates 
+a ring with inflow and outflow channels of 
+higher wettability than the vicinity.
+The y-direction is normal to the surface.
+
+The input file therefore is organized as follows:
+
+<nx> <ny> <nz> 
+	-> number of lattice points in x,y,z direction
+
+<bigrad> <smallrad>
+	-> inner and outer radius of the ring (lattice units)
+
+<midx> <midy> <midz>
+	-> midpoint coordinates of the ring (lkattice units)
+
+<rockcolor_p> <rockcolor_v>
+	-> rockcolor (wettability) of the pattern ("_p") 
+           and of the vicinity ("_v")
+
+<thick>
+	-> thickness of the substrate layer (lattice units)
+
+The inputfile contains only the values enclosed in the brackets
+in the given order without any comment.
+
+Any other patterning may easily be realized by declaring 
+suitable parameters and by modifying the lines 
+following line 105 of the code.
+
+Keep away from open windows.
+
+

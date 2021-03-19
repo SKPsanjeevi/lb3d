@@ -1,0 +1,15 @@
+#!/bin/bash
+MEAS=1000
+NT=020000
+STRUCTXDR=/data/ernie1/jens/FabianJ/comp/struct_hdf.icc
+for i in $* ; do
+echo $i
+cd $i
+DATADIR=`pwd`
+mkdir -p sf
+#$STRUCTXDR -file sur -nt $NT -meas $MEAS -inpfile `ls *.in` -data $DATADIR -res ./sf/
+$STRUCTXDR -file colour -nt $NT -meas $MEAS -inpfile `ls input*` -data $DATADIR -res ./sf/
+#$STRUCTXDR -file owd -nt $NT -meas $MEAS -inpfile `ls *.in` -data $DATADIR -res ./sf/
+cd ..
+done
+

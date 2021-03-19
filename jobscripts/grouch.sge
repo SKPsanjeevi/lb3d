@@ -1,0 +1,21 @@
+#!/bin/bash
+#$ -N GROUCH_job # set name of job
+#$ -S /bin/bash
+#$ -M first.lastname@your.site.edu
+#$ -m beas # email on (b)egin (e)nd (a)bort (s)uspend (n)ever
+#$ -l h_rt=00:30:00 # hard limit 30 min run
+# Parallel environment is set to openmpi, number is requested threadcount
+#$ -pe orte-* 64
+#$ -cwd # Use current working directory
+#$ -o $JOB_NAME.$JOB_ID.out
+#$ -e $JOB_NAME.$JOB_ID.err
+#$ -notify # send notification SIGnals to processes
+# See 'man qsub' for a complete list
+
+# Use 'qsub <jobfile>' to submit.
+
+export LD_LIBRARY_PATH=/usr/local/stow/intel/Compiler/11.1/059/lib/intel64:/usr/local/openmpi-1.6.0-intel-11.1/lib:$LD_LIBRARY_PATH
+
+
+/usr/local/openmpi-1.6.0-intel-11.1/bin/mpirun ./lbe -f input-file
+

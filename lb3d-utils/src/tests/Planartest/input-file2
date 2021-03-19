@@ -1,0 +1,67 @@
+&fixed_input
+nx = 16 
+ny = 16
+nz = 128 
+seed = 1
+obs_file = 'empty.dat'
+boundary_cond = 0
+/
+
+&variable_input
+n_iteration = 1000
+sci_start = 0
+n_sci = 10
+sci_int = .true.
+sci_sur = .true.
+n_sci_sur = 10
+sci_owd = .true.
+n_sci_owd = 10
+sci_dir = .true.
+n_sci_dir = 10
+sci_vel = .true.
+n_sci_vel = 10
+sci_flo = .true.
+n_sci_flo = 10
+sci_arrows = .true.
+n_sci_arrows = 10
+sci_pressure = .true.
+n_sci_pressure = 10
+sci_pressure_init = 3
+post=.true.
+steer=.false.
+folder = 'pl_tst_S'
+gr_out_file = 'pl_tst_S'
+init_cond = 3 
+fr = 0.7000
+fg = 0.600000
+fb = 0.7000
+fr1 = 63
+fr2 = 63 
+inv_fluid = 0
+rock_colour = 0
+beta = 1.000000
+/
+
+&lbe_input
+amass_b = 1.0
+amass_r = 1.0
+amass_s = 1.0
+tau_b = 1.0
+tau_r = 1.0
+tau_s = 1.0
+tau_d = 1.0
+g_br = 0.08
+g_bs = -0.006
+g_ss = -0.003
+d_0 = 1
+bdist = 2
+perturbation = 0
+shear_u = 0.0
+g_accn = 0.0
+checkpoint = 1000
+restore = 0
+psifunc = 2
+dump_format = 'xdr'
+write_AVS_fld = .true.
+dump_double = .false.
+/

@@ -1,0 +1,39 @@
+Usage:
+spheres_and_isosurf.py <file id> <params>
+where <file id> is everything between 'colour_' and '.vtk'.
+
+This will create rendered_left_<file id>.png and rendered_right_<file id>.png.
+One the left one the surface is transparent and on the right one the particles are transparent.
+
+
+Parameters and their default values:
+(Beware: not all of these are actually implemented, sorry)
+-interactive=0
+-elevation=10.0
+-zoom=4.0
+-azimuth=-10.0
+-radius=2.0
+-size=800x600
+-isosurfacevalue=0.0
+-sphereopacity=0.1
+-isoopacity=0.4
+-volumeopacitylow=0.01
+-volumeopacityhigh=0.01
+-spherecolour=[0,1,0]
+-isocolour=[0.8, 0.2, 0.9]
+-nosurface
+-novolume
+-nooutline
+-nospheres
+-nointeractive
+-write
+ 
+  
+ 
+
+
+
+ 
+
+
+

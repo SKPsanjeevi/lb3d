@@ -1,0 +1,59 @@
+
+# Configure the code to compile on 32bit Linux using the Intel Fortran
+# Compiler and MPICH-1.2.4
+
+ARCH	= LINUX
+NBIT	= 64
+PREPROCESS	=-cpp
+PXFGETARG=
+MPIINCLUDE	= 
+#MPILIBS	= -lmpich -L/usr/local64/lib
+# Best settings for the Core2Duo CPUs:
+LOCALFFLAGS= -xP -O3 -msse3 -mcmodel=large -DMALLEABLE_NP_CHECKPOINT -DCHECKPOINT_XDR -DNOREG
+# use next line to compile on AMD64 
+#LOCALFFLAGS=  -ipo -no -prec -div -msse2 -mcmodel=large -i-dynamic -DMALLEABLE_NP_CHECKPOINT -DCHECKPOINT_XDR -DNOREG
+#LOCALFFLAGS= -O3 -ipo -no-prec-div -msse3 -mcmodel=large -i-dynamic -DMALLEABLE_NP_CHECKPOINT -DCHECKPOINT_XDR -DNOREG
+# Standard optimization:
+#LOCALFFLAGS= -O3 -ipo -DMALLEABLE_NP_CHECKPOINT -DCHECKPOINT_XDR
+#LOCALCFLAGS=
+FC	= mpif90
+F90	= mpif90
+CC	= mpicc
+LIB	= -lpthread
+AR	= ar
+
+# Give _absolute_ path of libxml2 directory here
+XML_LIBS	=  -lxml2
+XML_INCLUDE_PATH	= -I/usr/include/libxml2
+
+LIBHDF5	= -L/usr/local64/lib -I/usr/local64/lib #This is a mystery
+INCHDF5	= -I/usr/local64/include -I/usr/local64/lib  #but does not compile without     
+
+LIBZ	= /usr/lib/
+
+HDF5FLAGS	= $(INCHDF5)
+LIBSHDF	= $(LIBHDF5) -lhdf5_fortran -lhdf5 -lmpich
+#LIB	= -L$(LIBZ) -lz -lm -lmpi
+
+
+MAKEFFLAGS=-DFLAT -DUSEHDF -DSINGLEFLUID -DRELTIME
+LIBS = -L../../code/xdrf -lxdrf -lnsl ${MPILIBS}
+
+.F90.o:
+	$(F90) $(FFLAGS) -c $<
+
+all:	localtau xdrchannel #dbl2sgl cut1d cut1d_hdf rockall2xdr rotxdr bin2all zvelocity
+
+localtau:	localtau.F90
+	$(F90) -o localtau localtau.F90 $(LOCALFFLAGS) $(LDFLAGS) $(LIBS)
+
+xdrchannel:	xdrchannel.F90
+	$(F90) -o xdrchannel xdrchannel.F90 $(LOCALFFLAGS) $(LDFLAGS) $(LIBS)
+
+zufall:	zufall.F90
+	$(F90) -o zufall zufall.F90 $(LOCALFFLAGS) $(LDFLAGS) $(LIBS)
+
+clean:
+	rm -f *.o *.mod *.d xdrchannel localtau zufall work.*
+
+

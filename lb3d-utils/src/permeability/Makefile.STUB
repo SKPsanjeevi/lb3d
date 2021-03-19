@@ -1,0 +1,47 @@
+LIBS    = -lm $(CLIBS)
+
+
+ CFLAGSSGL =  -DSGL $(LOCALCFLAGS)
+ CFLAGSDBL = $(LOCALCFLAGS) 
+
+OBJ = hdfread.o hdfstats.o
+
+.c.o:  ; ${CC}  -c ${CFLAGS} ${INCL} $*.c $(LIBS)
+
+all:	all_dbl all_sgl permcalc
+
+all_dbl:	cleanobj xdr2raw createtunnel zvelocity voxels permcalc
+		rm -f *.o 
+
+all_sgl:	cleanobj xdr2raw_sgl createtunnel_sgl zvelocity voxels permcalc
+		rm -f *.o 
+
+cleanobj:
+	rm -f *.o 
+
+xdr2raw:	xdr2raw.c
+	${CC}	xdr2raw.c -o xdr2raw_dbl -O2 -lm 
+
+xdr2raw_sgl:	xdr2raw.c
+	${CC}	$(CFLAGSSGL) xdr2raw.c -o xdr2raw -O2 -lm 
+
+createtunnel_sgl: createtunnel.c
+	${CC}  createtunnel.c -o createtunnel_dbl $(LIBS)
+
+createtunnel: createtunnel.c
+	${CC}  $(CFLAGSSGL) createtunnel.c -o createtunnel $(LIBS)
+
+zvelocity: zvelocity.F90
+	$(F90) -o zvelocity zvelocity.F90 $(LIBS)
+
+voxels: voxels.f
+	$(F90) -o voxels voxels.f $(LIBS)
+
+permcalc: permcalc.c
+	${CC}  permcalc.c -o permcalc -O3 -lm -lhdf5 $(LIBS) -I/opt/hpmpi/include/64/
+
+
+ clean: 
+	rm -f *.o  *~ zvelocity createtunnel xdr2raw permcalc
+
+

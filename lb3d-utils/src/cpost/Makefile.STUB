@@ -1,0 +1,9 @@
+
+# Note -lnsl does not work on some machines (e.g. Lemieux at PSC)
+#LIBS	= -lm -lnsl
+LIBS	= -lm 
+
+post:	post.o fieldio.o namelist.o
+	$(CC) -o post post.o fieldio.o namelist.o $(LIBS)
+clean:
+	rm -f *.o *.bin *.xdr

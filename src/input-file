@@ -1,0 +1,104 @@
+&fixed_input
+nx = 32	
+ny = 32	
+nz = 32	
+seed = 1
+obs_file = 'empty.dat'
+boundary_cond = -4
+boundary_width = 1
+/
+
+&variable_input
+
+n_iteration = 500
+n_sci_start = 0
+sci_int = .true.
+n_sci_int = 1
+sci_sur = .false.
+n_sci_sur = 1000
+sci_od = .false.
+n_sci_od = 100
+sci_wd = .false.
+n_sci_wd = 100
+sci_dir = .false.
+n_sci_dir = 1000
+sci_vel = .false.
+n_sci_vel = 1
+sci_flo = .false.
+n_sci_flo = 1000
+sci_arrows = .false.
+n_sci_arrows = 1
+sci_velocities = .true.
+n_sci_velocities = 100
+sci_rock = .false.
+n_sci_rock = 100
+sci_fluxz = .false.
+n_sci_fluxz = 1000
+sci_profile = .false.
+n_sci_profile = 1000
+sci_pressure = .false.
+n_sci_pressure = 1000
+sci_pressure_init = 1000
+
+post = .true.
+folder = '../.'
+cpfolder = '../.'
+srccpfolder = ''
+gr_out_file = 'test'
+
+init_cond = -4 
+inv_fluid = -1
+
+fr = 1.0
+fb = 0.00
+fg = 0.00
+fr1 = 22
+pr = 0.0
+pg = 0.0
+beta = 1.0
+inv_fluid = -1
+rock_colour = 0
+beta = 1.000000
+/
+
+&lbe_input
+bcsel = 0
+MRT = .false.
+kbT= -0.0001
+SCMP = .false.
+OXFORD = .false.
+amass_b = 1.0
+amass_r = 1.0
+amass_s = 1.0
+tau_r = 1.0
+taubulk_r = 1.0 
+tau_b = 1.0
+taubulk_b = 1.0 
+tau_s = 1.0
+tau_d = 1.0
+bcsel = 0
+acccoef = 0
+g_br = 0.12
+g_bs = -0.005
+g_ss = -0.005
+d_0 = 1.0
+bdist = 2
+perturbation = 0.0
+shear_omega = 0.0
+g_accn_y = 0! 1E-6
+n_checkpoint = 100
+restore_string = "t00000000-0000000000"
+num_chkp_files = 2
+psifunc = 2
+dump_format = "hdf"
+checkpoint_safe = .false.
+checkpoint_format = 'xdr'
+dump_double = .false.
+n_sanity_check = 10
+shear_u = 0.00
+/
+
+dump_double = .false.
+n_sanity_check = 10
+shear_u = 0.00
+/

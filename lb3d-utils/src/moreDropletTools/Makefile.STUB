@@ -1,0 +1,51 @@
+VTMP="lbe_version.tmp"
+VH="lbe_version.h"
+
+CPP=icpc
+
+all: version arr-to-velz check-minority check-values droplet-surfacetension droplet-deformation droplet-profiles droplet-tt
+
+arr-to-velz:
+	$(CPP) -g -o arr-to-velz hdf5_helper.cpp arr-to-velz.cpp -lhdf5
+
+check-minority:
+	$(CPP) -g -o check-minority hdf5_helper.cpp check-minority.cpp -lhdf5
+
+check-values:
+	$(CPP) -g -o check-values hdf5_helper.cpp check-values.cpp -lhdf5
+
+droplet-surfacetension:
+	$(CPP) -g -o droplet-surfacetension hdf5_helper.cpp droplet-surfacetension.cpp -lhdf5
+
+droplet-deformation:
+	$(CPP) -g -o droplet-deformation dsyevj3.cpp hdf5_helper.cpp droplet-deformation.cpp -lhdf5
+
+droplet-profiles:
+	$(CPP) -g -o droplet-profiles hdf5_helper.cpp droplet-profiles.cpp -lhdf5
+
+droplet-tt:
+	$(CPP) -g -o droplet-tt droplet-tt.cpp -Wall
+
+doxygen:
+	doxygen
+
+clean:
+	rm -f arr-to-velz
+	rm -f check-minority
+	rm -f check-values
+	rm -f droplet-surfacetension
+	rm -f droplet-deformation
+	rm -f droplet-profiles
+	rm -f droplet-tt
+	rm -f *~
+	rm -rf doxygen
+	rm -f $(VH)
+
+version:
+	@./get-version.sh -c > $(VTMP)
+	@echo "#define LBE_PLATFORM \\"$(PLATFORM)\\"" >> $(VTMP)
+	@echo "" >> $(VTMP)
+	@diff $(VTMP) $(VH) > /dev/null 2>&1 ; if [ "$$?" -eq 0 ] ; then rm -rf $(VTMP) ; else echo "Creating new $(VH)"; mv $(VTMP) $(VH); fi
+
+
+

@@ -1,0 +1,17 @@
+Syntax: ./rock_calculations <od_filename> <vel_filename> <rock_filename> [--noverbose/--dumppermeability]
+
+rock_calculations reads three input files which contain density, velocity and rock structure, respectively.
+The optional flag --noverbose reduces the information written to stdout and --dumppermeability makes the program write only the value for the permeability (--dumppermeability implies --noverbose).
+
+The program will always read wall thickness, inlet/outlet size (one parameter!), tau, delta_x and delta_t from stdin (in that order), so you can pipe in a text file for batch jobs.
+
+NEW: Can also supply the parameters WALL, IOLET, TAU, DELTA_X, DELTA_T at compile time, together with option NOREPEAT. NOREPEAT will remove the loop for trying different parameters after loading the dataset once.
+
+The script rock_calculations.sh will also help with batch processing:
+
+Syntax: ./rock_calculations.sh <name> <code> <paramfile> [--dumppermeability]
+
+The output filenames of LB3D are of the form 'rock_<name>_txxxxxxxx-<code>.h5'.
+The <paramfile> should be a text file containing the 5 parameters described above. 
+When --dumppermeability is supplied, the script will also generate a file with <t> <perm> on every line, to easily look at time dependence of the permeability and its stabilization.
+

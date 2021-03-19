@@ -1,0 +1,275 @@
+# Script for submitting jobs to JUMP
+# Has to reside in $WORKDIR
+#
+
+# @shell = /bin/ksh
+# @job_name = lbe.32t 
+# @notify_user = sschmie@icp.uni-stuttgart.de
+# @notification = never 
+#
+
+# @job_type = serial
+# @node_usage = shared
+# @wall_clock_limit = 00:05:00
+# @output = $(job_name).$(schedd_host).$(jobid).$(stepid)
+# @error  = $(job_name).$(schedd_host).$(jobid).$(stepid)
+# @step_name = pre
+# @queue
+#
+
+# @job_type = parallel
+# @total_tasks = 32 
+# @node_usage = shared
+# @wall_clock_limit = 04:00:00,03:30:00
+# @output = $(job_name).$(schedd_host).$(jobid).$(stepid)
+# @error  = $(job_name).$(schedd_host).$(jobid).$(stepid)
+# @step_name = main
+# make sure this step is only executed when 'pre' is finished
+# @dependency = (pre == 0) 
+# @notification = start 
+# @queue
+#
+
+# @job_type = serial
+# @node_usage = shared
+# @wall_clock_limit = 00:30:00
+# @output = $(job_name).$(schedd_host).$(jobid).$(stepid)
+# @error  = $(job_name).$(schedd_host).$(jobid).$(stepid)
+# @step_name = post
+# make sure this step is only executed when 'main' is finished
+# @dependency = (main != 100)
+# @notification = complete
+# @queue
+#
+
+WORKDIR=$WORK/hss089
+INPUTROOT=$HOME/input-files
+INPUTDIR="current"
+ROCKDIR=$HOME/rocks
+LBEDIR=$HOME/bin
+BINARY=lbe
+
+echo $0
+
+cd $INPUTROOT/$INPUTDIR/
+CURRENTIN=`ls -t *.in | tail -1`
+SIMDIR=`echo $CURRENTIN | sed -e s/".in"//`
+
+if [ $SIMDIR ]
+then
+
+MINRERUNDELTA="20"
+WAITSTEP="60"
+
+JOBID=""
+
+function submit
+{
+    cd $WORKDIR/$SIMDIR
+    _run=0
+    if [[ ! -e RUNS ]]; then
+	# This is the 1st run
+	echo "-> starting sim $SIMDIR for the first time"
+	./$BINARY -f $CURRENTIN 1> ./std.log.0 2> ./err.log.0 &
+	JOBID="$!"
+	echo $JOBID > CURRENTJOBID
+	JOBIDS="$JOBIDS $JOBID"
+    else
+	    # No, we are not done, resubmit. 
+	_run=`cat RUNS`; echo "-> job $i restarted for "$_run". time."
+	    # What is my latest checkpoint
+	CHECKPOINT=`ls -rt checkpoint_*xdr|tail -1`
+	RESTORESTRING=`echo $CHECKPOINT | cut -d "_" -f "3"`
+	echo "Latest checkpoint for sim $i: $checkpoint"
+	LASTINITCOND=`less $CURRENTIN | grep init_cond`
+	LASTRESTORESTRING=`less $CURRENTIN | grep restore_string`
+	sed -e s/"$LASTINITCOND"/"init_cond = 7"/ $CURRENTIN > TMPCONF1
+	sed -e s/"$LASTRESTORESTRING"/"restore_string = '$RESTORESTRING'"/ TMPCONF1 > TMPCONF2
+	cp TMPCONF2 $CURRENTIN
+	./$BINARY -f $CURRENTIN > ./std.log.$_run 2> ./err.log.$_run &
+	JOBID="$!"
+	date +%s > CURRENTJOBID
+	echo $JOBID >> CURRENTJOBID
+	JOBIDS="$JOBIDS $JOBID"
+    fi
+    let _run=_run+1; echo $_run >RUNS
+}
+
+function checkfinish
+{
+    FINISH=1
+  for jobid in $JOBIDS
+  do
+    # search for PID of each job
+    ps -p $jobid 1> /dev/null 2> /dev/null
+    if [ $? -eq 0 ]
+    then
+      FINISH=0
+      # $jobid still running
+      # echo "$jobid running"
+     else
+       echo "$jobid not running"
+       FINISH=1
+     fi
+  done
+}
+
+function waitforfinish
+{
+ while true
+ do
+  echo "Sleeping $WAITSTEP seconds"
+  sleep $WAITSTEP
+  checkfinish
+  if [ "$FINISH" -gt 0 ]
+      then
+      return 0
+  fi
+ done
+}
+
+function cleanupfinished
+{
+    cd $WORKDIR/$SIMDIR
+    FINISHEDJOBID=`cat FINISHED | cut -d " " -f "1"`
+    echo "killing $FINISHEDJOBID: finished."
+    kill -HUP $FINISHEDJOBID
+    sleep 120
+    kill -9 $FINISHEDJOBID
+}
+
+
+function postprocess
+{
+    cd $WORKDIR/$SIMDIR
+    mkdir -p safe
+    mv *.h5 ./safe
+    mv *.xdr ./safe
+    mv std.* ./safe
+    mv err.* ./safe
+    mv $BINARY ./safe
+    mv $CURRENTIN ./safe
+    mv RUNS ./safe
+    mv CURRENTJOBID ./safe
+    mv FAILED ./safe
+    mv FINISHED ./safe
+    mv TMPCONF* ./safe
+    mv PREDONE ./safe
+    mv LASTRERUN ./safe
+    cd safe
+    bzip2 *
+    tar cvf $SIMDIR.check.bz2.tar check*bz2
+    tar cvf $SIMDIR.data.bz2.tar *.h5.bz2
+    cd ..
+    DATE=`date +"%F-%H-%M"`
+    mkdir $SIMDIR.$DATE
+    mv ./safe/*.bz2 $SIMDIR.$DATE
+}
+
+function submitnext
+{
+    if [ $CURRENTIN != "" ]
+	then   
+	mv $INPUTROOT/$INPUTDIR/$CURRENTIN $INPUTROOT/done/
+	cd $INPUTROOT/$INPUTDIR/ 
+	CURRENTIN=`ls -t *.in | tail -1`
+	if [ $CURRENTIN != "" ]
+	    then
+	    llsubmit $WORKDIR/runlbe.jump
+	else
+	    llcancelall
+	fi
+    fi
+}
+
+if [[ $LOADL_STEP_NAME = pre ]]
+    then 
+    cd $WORKDIR
+    SIMDIR=`echo $CURRENTIN | sed -e s/".in"//`
+    mkdir -p $SIMDIR
+    cd $SIMDIR
+    if [ -e PREDONE ]
+	then
+	echo "Been here before, bye."
+	exit 0
+    else    
+	echo "Created $WORKDIR/$SIMDIR"
+	cp $LBEDIR/$BINARY .
+	cp $INPUTROOT/$INPUTDIR/$CURRENTIN .
+	echo "Copied $CURRENTIN and $BINARY to $SIMDIR/"
+	CURRENTROCK=`grep obs_file $CURRENTIN | cut -d "'" -f "2"`
+	if [ -e $ROCKDIR/$CURRENTROCK ] 
+	    then
+	    cp $ROCKDIR/$CURRENTROCK $WORKDIR/rocks/
+	    echo "Copied $CURRENTROCK to $WORKDIR/rocks/"
+	elif [ $CURRENTROCK == "empty.dat" ]
+	    then
+	    echo "No obstacle file needed."
+		# No obstacle file needed - nothing to be done
+	else
+		# Given obstacle file is not present - lbe would fail
+	    echo "Obstacle File $CURRENTROCK missing in $ROCKDIR/, exiting pre (1)"
+	    exit 1
+	    fi
+	date +%s > PREDONE
+	exit 0
+    fi
+    
+fi
+
+if [[ $LOADL_STEP_NAME = main ]]
+    then
+    cd $WORKDIR/$SIMDIR
+    if [ -e FINISHED ]
+	then
+	# Fullfill post dependency right away
+	exit 0
+    else
+	submit    
+	waitforfinish
+	exit $?
+    fi
+    # Should not be reached
+    exit 1
+fi
+
+if [[ $LOADL_STEP_NAME = post ]]
+    then
+    cd $WORKDIR/$SIMDIR
+    ASPIREDTIMESTEP=`grep n_iteration $CURRENTIN | cut -d "=" -f "2" | sed -e s/" "//g`
+    LASTTIMESTEP=`ls -rt *h5 | tail -1 | cut -d "_" -f "3" | cut -d "-" -f "1" | sed -e s/"t"//g`
+    if [ $LASTTIMESTEP -eq $ASPIREDTIMESTEP ]
+	then
+	    # Yes, we are there. Set finished
+	echo "Nothing more to do for $CURRENTIN. Setting FINISHED"
+	date +%s > FINISHED
+	echo `$JOBID` > FINISHED
+    fi
+    if [ -e FINISHED ]
+	then
+	cleanupfinished
+	#Postprocess
+	submitnext
+    else
+	if [ -e LASTRERUN ] 
+	    then
+	    LASTTIME=`less LASTRERUN | cut -d " " -f "1"`
+	    CURRENTTIME=`date +%s`
+	    DELTATIME=$(( $CURRENTTIME - $LASTTIME ))
+	
+	if [ $DELTATIME -lt $MINRERUNDELTA ]
+	    then
+	    echo "Last rerun started $DELTATIME ago. Exiting..."
+	    llcancelall
+	fi
+	else
+	    date +%s > LASTRERUN
+	    echo "Resubmitting job."
+	    llsubmit $WORKDIR/runlbe.jump
+	fi
+    fi
+	
+fi
+else
+echo "no simdir."
+fi

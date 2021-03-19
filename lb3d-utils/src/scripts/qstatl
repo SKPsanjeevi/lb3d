@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# set this to your own user name
+USER=hss085
+
+# this script is intended for JUROPA. It provides the usual qstat
+# output for all jobs of a user plus the path where each is running
+# in. It also displays the total number of queued and running jobs.
+#
+# Provided that LB3D's standard output is directed into a file with
+# extension ".out" and that the input file is named "input-file", the
+# current and final time step is shown as well.
+
+output="`qstat -u $USER`"
+header=`echo "$output" |head -n 5`
+output=`echo "$output" |tail -n +6`
+total=`echo "$output" |grep ' [HQR] ' |wc -l`
+running=`echo "$output" |grep ' R ' |wc -l`
+queued=`echo "$output" |grep ' [HQ] ' |wc -l`
+if [ "$total" -ne 0 ]
+then
+    echo "$header"
+    echo "$output" |while read line
+    do
+	jid=${line%% *}
+	iwd=`qstat -x $jid |sed 's/.*PBS_O_WORKDIR=//' |sed 's/<.*//'`
+	echo -n "$line"
+	echo -ne "\t$iwd"
+
+	ofiles=`ls -tr $iwd/*.out 2>/dev/null`
+	if [ "$?" -eq 0 ]
+	then
+	    ofile=`echo "$ofiles" |tail -n 1`
+	    ts=`grep 'Starting timestep' $ofile |tail -n 1 |sed 's/^.*Starting timestep //'`
+	else
+	    ts=--
+	fi
+	nit=`grep 'n_iteration' $iwd/input-file |sed 's/^.*=//' |sed 's/ //g'`
+	echo -e "\t$ts/$nit"
+    done
+    echo "-------------------- -------- -------- ---------------- ------ ----- --- ------ ----- - -----"
+fi
+
+echo -e "Total: $total\tRunning: $running\tQueued: $queued"

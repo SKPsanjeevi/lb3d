@@ -1,0 +1,41 @@
+#!/usr/freeware/bin/bash
+DATADIR=`pwd`
+XDRTOOLS=/volta/scratch/jens/lbe/utils/xdrtools
+XDR2VTKS=xdr2vtk_scalar_sgl.sgi
+XDR2VTK2=xdr2vtk_2scalar_sgl.sgi
+XDR2VTKV=xdr2vtk_vector_sgl.sgi
+SIZE="64 64 64"
+ 
+#----------------------------
+XDR2VTKS=$XDRTOOLS/$XDR2VTKS
+XDR2VTK2=$XDRTOOLS/$XDR2VTK2
+XDR2VTKV=$XDRTOOLS/$XDR2VTKV
+
+for i in $* ; do
+echo $i
+cd $i
+ for j in `ls sur*.xdr` ; do
+    echo $i $j
+    OUT=`echo $j|sed s/.xdr/.vtk/`
+    $XDR2VTKS $SIZE $j $OUT
+ done
+ for j in `ls col*.xdr` ; do
+    echo $i $j
+    OUT=`echo $j|sed s/.xdr/.vtk/`
+    $XDR2VTKS $SIZE $j $OUT 
+ done
+ for j in `ls dir*.xdr` ; do
+    echo $i $j
+    OUT=`echo $j|sed s/.xdr/.vtk/`
+    $XDR2VTKV $SIZE $j $OUT
+ done
+ for j in `ls owd*.xdr` ; do
+    echo $i $j
+    OUT1=`echo $j|sed s/owd/od/|sed s/.xdr/.vtk/`
+    OUT2=`echo $j|sed s/owd/wd/|sed s/.xdr/.vtk/`
+    $XDR2VTK2 $SIZE $j $OUT1 $OUT2
+ done
+
+cd ..
+done
+

@@ -1,0 +1,62 @@
+How to obtain the permeability of a sample
+------------------------------------------
+
+I. How to create rock files from raw files
+------------------------------------------
+
+If one does not have a proper lb3d rock file, but typical greyscale
+discretizations, one has to convert and threshold them:
+
+
+1.) Convert the raw file to ascii.
+./raw2ascii <file.raw >file.ascii
+
+2.) threshold it.
+Edit threshold value (th) and system size (M) in thres_mCT.f and
+recompile.
+
+./thres_mCT
+
+We now have file.ascii.thresh
+
+4.) Use "createtunnel" to generate an XDR rock file with inflow region and
+surrounding tunnel. Make sure the resulting lattice can be evenly
+distributed on the preferred numer of processors.
+
+Example:
+
+./createtunnel file.ascii.thresh 100 100 100 128 128 128
+
+This tool should create a VTK file as well as an XDR rock file.
+
+
+II. Calculate permeabilities
+----------------------------
+
+1.) Run lb3d with the following settings:
+
+obs_file = 'yourfile.xdr'
+boundary_cond = 0
+
+sci_od = .true.
+sci_vel = .true.
+(frequencies depend on your needs)
+
+init_cond = -3
+fr = 0.7
+inv_fluid = 0
+
+tau_r = 0.857
+g_accn = 0.0001 (might have to be changed)
+g_accn_min = 1
+g_accn_max = 5
+dump_format = 'hdf'
+dump_double = .true.
+
+2.) Adopt header lines in mflowscript.sh and run it in your data
+directory. This script calls "zvelocity" for every set of od/vel files and
+computes the permeabilities.
+
+3.) For checking the time dependence of the permeability, use
+mkpermtime.sh in order to grep permeabilities and timesteps from the
+individual output files of "zvelocity".

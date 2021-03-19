@@ -1,0 +1,71 @@
+#!/bin/bash
+#/usr/freeware/bin/bash
+#
+# This script creates AVS field files for XDR data files.
+#
+# Set the parameters in the beginning accordingly.
+#
+DATADIR=`pwd`
+SIZEX=64
+SIZEY=64
+SIZEZ=64
+#Set FORMAT to xdr_double or xdr_float
+FORMAT=xdr_float
+ 
+#----------------------------
+
+for i in $* ; do
+echo $i
+cd $i
+#----SCALAR------------------
+ for j in `ls sur*.xdr col*.xdr vel*.xdr p*.xdr` ; do
+    echo $i $j
+    OUT=`echo $j|sed s/.xdr/.fld/`
+    echo "# AVS field file" >$OUT
+    echo "ndim=3" >>$OUT
+    echo "dim1=$SIZEX" >>$OUT
+    echo "dim2=$SIZEY" >>$OUT
+    echo "dim3=$SIZEZ" >>$OUT
+    echo "nspace=3" >>$OUT
+    echo "field=uniform" >>$OUT
+    echo "veclen=1" >>$OUT
+    echo "data=$FORMAT" >>$OUT
+    echo "variable 1 file=$j filetype=binary skip=0000000 stride=1" >>$OUT
+ done
+#---2SCALAR------------------
+ for j in `ls owd*.xdr` ; do
+    echo $i $j
+    OUT=`echo $j|sed s/.xdr/.fld/`
+    echo "# AVS field file" >$OUT
+    echo "ndim=3" >>$OUT
+    echo "dim1=$SIZEX" >>$OUT
+    echo "dim2=$SIZEY" >>$OUT
+    echo "dim3=$SIZEZ" >>$OUT
+    echo "nspace=3" >>$OUT
+    echo "field=uniform" >>$OUT
+    echo "veclen=2" >>$OUT
+    echo "data=$FORMAT" >>$OUT
+    echo "variable 1 file=$j filetype=binary skip=0000000 stride=2" >>$OUT
+    echo "variable 2 file=$j filetype=binary skip=0000008 stride=2" >>$OUT
+ done
+
+#----VECTOR------------------
+ for j in `ls dir*.xdr arr*.xdr flo*.xdr` ; do
+    echo $i $j
+    OUT=`echo $j|sed s/.xdr/.fld/`
+    echo "# AVS field file" >$OUT
+    echo "ndim=3" >>$OUT
+    echo "dim1=$SIZEX" >>$OUT
+    echo "dim2=$SIZEY" >>$OUT
+    echo "dim3=$SIZEZ" >>$OUT
+    echo "nspace=3" >>$OUT
+    echo "field=uniform" >>$OUT
+    echo "veclen=3" >>$OUT
+    echo "data=$FORMAT" >>$OUT
+    echo "variable 1 file=$j filetype=binary skip=0000000 stride=3" >>$OUT
+    echo "variable 2 file=$j filetype=binary skip=0000008 stride=3" >>$OUT
+    echo "variable 3 file=$j filetype=binary skip=0000016 stride=3" >>$OUT
+ done
+cd ..
+done
+

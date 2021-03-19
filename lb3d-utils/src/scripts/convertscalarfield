@@ -1,0 +1,15 @@
+#!/bin/bash
+f=$2
+if [ "x$f" = "x" ]
+  then f="/dev/stdout"
+fi
+export HDF5_DISABLE_VERSION_CHECK=2
+h5totxt $1 | \
+awk 'BEGIN{x=0;y=0;z=0}{gsub(/,/," ");\
+if($1=="")\
+  {y=0;z++}\
+else{for(x=1;x<=NF;x++)\
+  {print z " " y " " x-1 " " $x " "; }y++}}' \
+| awk '{ if(match("version",$3)){exit} \
+  print $3+1 " " $2+1 " " $1+1 " " $4}' > $f
+

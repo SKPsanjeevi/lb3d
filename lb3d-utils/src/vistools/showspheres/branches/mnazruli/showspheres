@@ -1,0 +1,321 @@
+#!/usr/bin/env python
+
+def printSettings():
+ print "WriteImages:",writeImages
+ print "color:",color
+ print "fixedradius",fixedRadius
+ print "raiuds:",radius
+ print "delay:",delay
+ 
+
+def printHelp():
+ print """
+ Usage: showspheres FilesAndOptions
+ Files and options can be mixed. Options apply to all following files.
+ E.g. you can change the text during the movie.
+ Options (including the minus sign) can also appear in the data files.
+
+
+ Options are:
+  -color, -nocolor    Read color value between 0 and 1 from 5th column of input
+  -write -nowrite     Do or do not write jpegs of the images displayed
+  -fixedradius
+  -nofixedradius      If nofixedradius is set, the radius will be read from 
+                      the 4th column of the data file. Otherwie use -radius=
+  -radius=            Set radius if fixedradius is set.
+  -text=              Set the text that is displayed in the image
+  -delay=             Delay in seconds between images 
+ """ 
+ exit(0)
+
+def setZoom(z):
+ ren.GetActiveCamera().Zoom(z)
+ if first == 0:
+  ren.GetActiveCamera().Modified()
+
+
+
+import vtk
+import sys
+import time
+import spheredefaults as cfg
+
+
+def dumpImage(filename):
+   toImage =vtk.vtkWindowToImageFilter()
+   toImage.SetInput(renWin)
+   toImage.Modified()
+   writer = vtk.vtkJPEGWriter()
+   writer.SetQuality(100)
+   writer.ProgressiveOn()
+   writer.SetInput(toImage.GetOutput())
+   writer.SetFileName(filename)
+   writer.Modified()
+   print "writing to ",filename
+   writer.Write()
+
+
+
+
+
+def setText(txt):
+ text.SetInput(txt)
+
+
+
+def processOption(s):
+ global color
+ global elevation
+ global azimuth
+ global zoom
+ global writeImages
+ global delay
+ global radius
+ global fixedRadius
+
+ if s.find('-color') == 0:
+  print "Setting color mode."
+  color = 1
+ 
+ if s.find('-nocolor') == 0:
+  print "Unsetting color mode."
+  color =0
+
+
+
+ if s.find('-write') == 0:
+  print "Writing images."
+  writeImages = 1
+ 
+ if s.find('-nowrite') == 0:
+  print "Not writing images"
+  writeImages =0
+ 
+ if s.find('-fixedradius') == 0:
+  print "Using fixed radius."
+  fixedRadius = 1
+ 
+ if s.find('-nofixedradius') == 0:
+  print "Don't use fixed radius"
+  fixedRadius =0
+ if s.find('-radius') == 0:
+  radius = s.split('=')[1]
+ 
+ if s.find('-text') == 0:
+  setText(s.split('=')[1])
+
+ if s.find('-zoom') == 0:
+  etZoom(s.split('=')[1])
+
+ if s.find('-elevation') == 0:
+  elevation = s.split('=')[1]
+ if s.find('-delay') == 0:
+  delay = float(s.split('=')[1])
+ 
+ if s.find('-azimuth') ==0:
+  azimuth = s.split('=')[1]
+
+ if s.find('-h') ==0:
+  printHelp()
+
+ if s.find('-help') ==0:
+  printHelp()
+
+def readFile(filename):
+ file = open(filename,"r")
+ lines =0
+
+ # Read until eof
+ while file:
+  line = file.readline()
+  if line == "":
+   break
+  line = str.rstrip(line)
+  cols =line.split('	')
+  if len(cols)  <3:
+   if line.find('-') == 0:
+    print "Treating as options: ",line
+    processOption(line)
+   else: 
+    print "Omitting line: ", line
+   continue
+  x=cols[0]
+  y=cols[1]
+  z=cols[2]
+  if fixedRadius == 0:
+   r=2*float(cols[3])
+  else:
+   if len(cols) <4:
+    print "Too few columns! Omitting: ",line
+    continue
+
+   r =2*float(radius)
+  if color==1:
+   c=cols[4]
+  else:
+   c=0
+#  print "x=",x,"y=",y,"z=",z,"r=",r,"c=",c
+  points.InsertNextPoint(float(x), float(y), float(z))
+  radii.InsertNextValue(float(r))
+  tags.InsertNextValue(float(c))
+  lines +=1
+ print filename, lines
+ return lines
+
+
+
+
+def checkCommandline():
+ if len(sys.argv) ==1:
+  print "Give filenames as arguments.\n";
+  exit(1)
+
+def doFile(filename):
+ global first
+ points.Reset()
+ radii.Reset()
+ tags.Reset()
+ 
+ lines = readFile(filename)
+ if 1==1:
+  data.SetNumberOfTuples(lines)
+  data.CopyComponent(0, radii, 0)
+  data.CopyComponent(1, tags, 0)
+  if first==0:
+   points.Modified()
+  ren.GetActiveCamera().Azimuth(azimuth)
+  ren.GetActiveCamera().Elevation(elevation)
+  if first == 0:
+   ren.GetActiveCamera().Modified()
+  # render
+  iren.Initialize()
+  renWin.Render()
+  if first==1:
+   first =0
+ else: # lines >0
+  print "Does not contain any data."
+ 
+ 
+
+
+
+## Main:
+
+# some radii
+radii = vtk.vtkFloatArray()
+radii.SetName("radius")
+
+# define the colours for the spheres
+tags = vtk.vtkFloatArray()
+tags.SetName("tag")
+
+data = vtk.vtkFloatArray()
+data.SetNumberOfComponents(2)
+data.SetName("data")
+
+# define the locations of the spheres
+points = vtk.vtkPoints()
+
+# construct the grid
+grid = vtk.vtkUnstructuredGrid()
+grid.SetPoints(points)
+grid.GetPointData().AddArray(data)
+grid.GetPointData().SetActiveScalars("data")
+
+# Create a sphere to use as a glyph source for vtkGlyph3D.
+sphere = vtk.vtkSphereSource()
+sphere.SetRadius(0.5)
+sphere.SetPhiResolution(10)
+sphere.SetThetaResolution(10)
+
+# make the glyphs
+glyph = vtk.vtkGlyph3D()
+glyph.SetInput(grid)
+glyph.SetSource(sphere.GetOutput())
+glyph.ClampingOff()
+glyph.SetScaleModeToScaleByScalar()
+glyph.SetScaleFactor(1.0)
+glyph.SetColorModeToColorByScalar()
+
+# set up the mapper
+mapper = vtk.vtkPolyDataMapper()
+mapper.SetInput(glyph.GetOutput())
+mapper.ScalarVisibilityOn()
+mapper.ColorByArrayComponent("data", 1)
+
+# set up the actor
+actor = vtk.vtkActor()
+actor.SetMapper(mapper)
+
+# do renderer setup stuff
+ren = vtk.vtkRenderer()
+renWin = vtk.vtkRenderWindow()
+renWin.AddRenderer(ren)
+renWin.SetSize(640, 480)
+iren = vtk.vtkRenderWindowInteractor()
+iren.SetRenderWindow(renWin)
+
+# add the actor to the renderer
+ren.AddActor(actor)
+
+# Prepare text
+text = vtk.vtkTextMapper()
+t =""
+text.SetInput(t)
+text.GetTextProperty().SetColor(0,0,1)
+textActor = vtk.vtkScaledTextActor()
+textActor.SetMapper(text)
+textActor.SetDisplayPosition(cfg.textX,cfg.textY)
+ren.AddActor2D(textActor)
+
+
+ren.SetBackground(1,1,1) # Background color white
+
+azimuth =cfg.azimuth
+elevation =cfg.elevation
+zoom =cfg.zoom 
+color =cfg.color
+writeImages =cfg.writeImages
+delay=cfg.delay
+radius =cfg.radius
+fixedRadius = cfg.fixedRadius
+printSettings()
+first =1
+
+
+# Erstmal irgend ein Bild anzeigen. Keinen blassen, warum das muss, aber ohne das ist das Fenster leer.
+#points.Reset()
+#radii.Reset()
+#tags.Reset()
+##
+#ma#
+#Find 1st argument that is a file 
+i=1
+while sys.argv[i].find('-') ==0:
+ processOption(sys.argv[i])
+ i=i+1
+
+lines = readFile(sys.argv[i])
+data.SetNumberOfTuples(lines)
+data.CopyComponent(0, radii, 0)
+data.CopyComponent(1, tags, 0)
+#
+# render
+iren.Initialize()
+renWin.Render()
+#iren.Start()
+
+
+setZoom(zoom)
+while i<len(sys.argv):
+ if sys.argv[i].find('-') ==0:
+  print "Commandline option: ",sys.argv[i]
+  processOption(sys.argv[i])
+ else: 
+  doFile(sys.argv[i])
+  if writeImages == 1:
+   dumpImage(sys.argv[i].replace('.vtk','')+'.jpg')
+  time.sleep(delay)
+ i=i+1
+
+iren.Start()

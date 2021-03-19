@@ -1,0 +1,34 @@
+ .KEEP_STATE:
+ .SUFFIXES: .c .f .o
+
+
+ #INCL        = -I.  
+
+ LIBS	= -lm
+ XLIBS	= -lXm -lXt -lXext -lX11 -lm
+ #CFLAGS = -s
+ #CFLAGS  =  -n32  -O2  -mips4  -OPT:Olimit=0
+ #CFLAGS  =  -64 -O3  -mips4 -OPT:Olimit=0
+ #CFLAGS= -O6 -mpentiumpro -pipe -malign-functions=2 -malign-loops=2 -malign-jumps=2 -DANSIC
+ CFLAGS = -g
+ #CFLAGS = -ggdb3
+ #CC	= gcc
+ CC     = cc
+ OBJ	= main.o help.o tools.o caller.o read_data.o
+ OBJ2	= decode_FLOAT.o fft.o circ_avg_B.o domain_size_B.o dump_to_files.o sfmisc.o rlft3_d.o fourn_d.o
+ OBJ3	= decode_DOUBLE.o fft.o circ_avg_B.o domain_size_B.o dump_to_files.o sfmisc.o rlft3_d.o fourn_d.o
+ TARGET	= struct_xdr
+
+ .c.o:  ; ${CC}  -c ${CFLAGS} ${INCL} $*.c
+
+ all: sgl dbl
+
+ sgl:	$(OBJ) $(OBJ2)
+	${CC}  $(CFLAGS) $(OBJ) $(OBJ2) -o $(TARGET).sgl $(LIBS)
+
+ dbl:	$(OBJ) $(OBJ3)
+	${CC}  $(CFLAGS) $(OBJ) $(OBJ3) -o $(TARGET).dbl $(LIBS)
+
+ clean: 
+	rm -f *.o *.s *~ $(TARGET).sgl $(TARGET).dbl
+

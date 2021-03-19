@@ -1,0 +1,54 @@
+#!/bin/bash
+#id="0753356176"
+#id="0825974025"
+id=$1
+#id=""
+nummer=""
+outname="droplet"
+gr_out_file=$outname$nummer
+progn="ma2tadsorbKugelOPSQmcol"
+prog="./"$progn
+prognr="01"
+aus="OP"$nummer
+
+echo $id > id.conf
+echo $outname > outname.conf
+
+
+#ls colour_adsorb01_t00006400-0199872626.h5
+#h5dump colour_absorb01_t00006400-0199872626.h5 > colour_absorb01_t00006400-0199872626.asc
+
+rm $progn
+g++ -o $progn $progn$prognr".cc" -O3
+ls $progn
+echo "g++ -o $progn $progn"$prognr".cc -O3"
+#echo "datei auslesen"
+echo "reading file"
+for (( i=0; $i <= 9; i++ )) ; do
+#for (( i=0; $i <= 2; i++ )) ; do
+    col="colour_"$gr_out_file"_t00000"$i"00-$id.h5"
+    colasc="colour_"$gr_out_file"_t00000"$i"00-$id.asc"
+    h5dump $col > $colasc
+    echo "$nummer: $i"
+done
+for (( i=10; $i <= 99; i++ )) ; do
+    col="colour_"$gr_out_file"_t0000"$i"00-$id.h5"
+    colasc="colour_"$gr_out_file"_t0000"$i"00-$id.asc"
+    h5dump $col > $colasc
+    echo "$nummer: $i"
+done
+for (( i=100; $i <= 100; i++ )) ; do
+    col="colour_"$gr_out_file"_t000"$i"00-$id.h5"
+    colasc="colour_"$gr_out_file"_t000"$i"00-$id.asc"
+    h5dump $col > $colasc
+    echo "$nummer: $i"
+done
+#echo "Berechnung starten"
+echo "starting calculation"
+#./ma2tadsorbKugelOPSQcol > $aus
+#./ma2tadsorbKugelOPSQcol
+$prog
+ls colour*asc
+rm colour*asc
+rm id.conf
+rm outname.conf

@@ -1,0 +1,47 @@
+#!/usr/sbin/perl
+
+my $outfile = shift;
+my $nx=shift;
+my $ny=shift;
+my $nz=shift;
+my $r = shift;
+
+open (OUTFILE,">$outfile") or die ("Unable to open $outfile");
+
+my $cx=$nx/2;
+my $cy=$ny/2;
+my $cz=$nz/2;
+
+for my $z (1..$nz) {
+	for my $y (1..$ny) {
+		for my $x (1..$nx) {
+			my $dx = $x-$cx;
+			my $dy = $y-$cy;
+			if (($dx*$dx+$dy*$dy)>=($r*$r)) {
+				print OUTFILE "$x $y $z 1\n";
+			} else {
+				print OUTFILE "$x $y $z 0\n";
+			}
+		}
+	}
+}
+
+close OUTFILE;
+
+open(FLDFILE,">$outfile.fld") or die ("Unable to open field file");
+
+print FLDFILE "# AVS field file\n";
+print FLDFILE "ndim=3\n";
+print FLDFILE "dim1=$nx\n";
+print FLDFILE "dim2=$ny\n";
+print FLDFILE "dim3=$nz\n";
+print FLDFILE "nspace=3\n";
+print FLDFILE "veclen=1\n";
+print FLDFILE "data=integer\n";
+print FLDFILE "field=irregular\n";
+print FLDFILE "coord 1 file=$outfile filetype=ascii skip=0 offset=0 stride=4\n";
+print FLDFILE "coord 2 file=$outfile filetype=ascii skip=0 offset=1 stride=4\n";
+print FLDFILE "coord 3 file=$outfile filetype=ascii skip=0 offset=2 stride=4\n";
+print FLDFILE "variable 1 file=$outfile filetype=ascii skip=0 offset=3 stride=4\n";
+
+close FLDFILE;

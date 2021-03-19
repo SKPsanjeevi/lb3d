@@ -1,0 +1,14 @@
+   file "box.c"
+execute "true"
+
+   file "config.guess"
+execute "true"
+
+   file "config.sub"
+execute "true"
+
+   file "configure"
+execute "true"
+
+   file "install-sh"
+execute "true"

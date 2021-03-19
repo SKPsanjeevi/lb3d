@@ -1,0 +1,3041 @@
+#include "lbe.h"
+
+!> coupling of particles and fluid similar to that in PRE 66, 046708
+!> (2002; nguyen02) or (closer) JFM 373, 287 (1998; aidun98)
+module lbe_md_fluid_ladd_module
+#ifdef MD
+  use lbe_helper_module, only: cross_product,check_dump_now,gaussianBoxMuller&
+       &,is_restoring, is_fluid, is_colloid, is_wall, every_n_time_steps, norm&
+       &,quadratic_solver, unit_vector
+  use lbe_bdist_module, only: boltz_dist,boltz_dist_s
+  use lbe_force_interface_module, only: get_total_force
+  use lbe_globals_module, only: c,cx,cy,cz,g,halo_extent,nnonrest,nvecs,pi&
+       &,restvec,input_dfile_unit,use_lbe_force,myrankc,n_spec,bounce
+  use lbe_leesedwards_module, only: le_fill_x_sbufs
+  use lbe_md_boundary_condition_module, only: closest_image&
+       &,copy_clip_chunks_to_real_sites&
+       &,copy_split_chunks_into_halo_intersections,local_chunks&
+       &,local_chunk_type,n_max_local_chunks
+  use lbe_md_dynamic_module, only: to_be_deleted,uid_of_deletee
+!!$  use lbe_md_dynamic_module, only: first_inserted_puid
+!!$  use lbe_md_enslavement_module, only: restore_slave_rock_state_at_interface&
+!!$       &,slave2master_rock_state_at_interface
+  use lbe_md_fluid_ladd_club_module, only: club_force_and_torque&
+       &,club_set_growth_factor,club_setup,club_summary_fluid,lubrication_cox&
+       &,lubrication_cox_max_store_points
+#ifdef LADD_DLUB
+  use lbe_md_fluid_ladd_dlub_module, only: clip_frac,contact_friction&
+       &,contact_stiffness,ding_lubrication,dlub_clear_links&
+       &,dlub_force_and_torque,dlub_setup,dlub_store_link,ti_md_fluid_dlubft
+#endif
+  use lbe_md_fluid_ladd_mc_module
+  use lbe_md_fluid_ladd_parms_module
+  use lbe_log_module
+  use lbe_md_globals_module
+  use lbe_md_helper_module, only: error_md,log_msg_md,log_msg_md_hdr&
+       &,maximum_particle_radius,md_make_filename_particles,particle_radii&
+       &,warning
+  use lbe_parallel_module, only: check_allocate,comm_cart&
+       &,start,tnx,tny,tnz
+  ! use  f(b|g|r)  as  pf(b|g|r)  to avoid conflicts with  force  fb(:)
+  ! in  prebounce_node() .
+  use lbe_parms_module, only: amass_r,amass_b,amass_s&
+       &,inp_file,tau_b,tau_r,tau_s,nt,n_sanity_check,arg_input_dfile_set&
+       &,arg_input_dfile,nx,ny,nz
+  use lbe_timer_module, only: register_timer,start_timer,stop_timer
+  use lbe_types_module, only: lbe_site
+#ifndef SINGLEFLUID
+  use lbe_collision_module, only: lbe_calculate_sc_forces
+#endif
+  use luxury_rng_module, only: ranlux
+  use map_module, only: Mii_count,Mii_cur_key,Mii_cur_value,Mii_map,Mii_rewind&
+       &,Mii_step
+#ifdef LADD_SSD
+  use lbe_parallel_module, only: nprocs
+#endif
+#ifdef LADD_GALILEAN
+  use lbe_parms_module, only: bdist
+#endif
+#ifdef DEBUG_MPI
+    use lbe_parallel_module, only: log_mpi
+#endif
+
+  implicit none
+  include 'mpif.h'
+
+  private
+
+  public average_density_r,fluid_ft_interaction_ladd_pre&
+       &,fluid_ft_interaction_ladd_post,fluid_ft_interaction_ladd_middle&
+       &,init_fluid_ladd,init_radii_normal,init_radii_random,init_radii_volume&
+       &,input_fluid_ladd,local_particle_velocity,lubrication_force_rock&
+       &,particle_lubrication,avg_particle_volume_fluid_ladd&
+       &,set_growth_factor_particle_lubrication,setup_fluid_ladd&
+       &,shutdown_fluid_ladd,summary_fluid_ladd,in_particle
+
+  !> cutoff center distances for particle-particle lubrication
+  real(kind=rk),save,public :: rc_lubrication_particle
+  !> cutoff center distances for particle-rock lubrication
+  real(kind=rk),save,public :: rc_lubrication_rock
+
+  !> maximum of \c R_orth and \c R_para, in case of polydispersity:
+  !> maximum over all all particles' \c R_orth and \c R_para
+  real(kind=rk),save :: ubound_R
+  !> \f$R_{orth}^2\f$
+  real(kind=rk),save :: Rosq
+  !> \f$R_{orth}^2/R_{para}^2\f$
+  real(kind=rk),save :: RosqbyRpsq
+  !!> \f$(R_{orth}-2)^2\f$
+  real(kind=rk),save :: Ro2sq
+  !!> \f$(R_{para}-2)^2\f$
+  real(kind=rk),save :: Rp2sq
+
+  !> \c \f$\mathtt{rc\_lubrication\_particle}^2\f$
+  real(kind=rk),save :: rclsq_particle
+  !> \c \f$\mathtt{rc\_lubrication\_rock}^2\f$
+  real(kind=rk),save :: rclsq_rock
+  !> \f$2R_{max}\f$
+  real(kind=rk),save :: twoR
+  !> \f$3\pi\mu R_\mathrm{max}^2/2\f$
+  real(kind=rk),save :: pi3muRsq_2
+  !> \f$\pi\mu R\f$ (only for tangential lubrication for spheres)
+  real(kind=rk),save :: pimuR
+  !> \f$\pi\mu R^2\f$ (only for tangential lubrication for spheres)
+  real(kind=rk),save :: pimuRsq
+  !> \f$8\pi\mu R^3/5\f$ (only for tangential lubrication for spheres)
+  real(kind=rk),save :: pi8muRcu_5
+  !> \f$3\pi\mu/8\f$
+  real(kind=rk),save :: pi3mud8
+  !> \f$R_{max}+R_{rock}\f$
+  real(kind=rk),save :: RLpRR
+  !> \f$6\pi\mu R_\mathrm{max}^2R_\mathrm{rock}^2
+  !> /(R_\mathrm{max}+R_\mathrm{rock})^2\f$
+  real(kind=rk),save :: pi6muRLsqRRsq_RLpRRsq
+
+  !> velocity distribution for resting fluid
+  real(kind=rk),save :: n_eq_u0(nvecs)
+
+  !> \{
+  !> \name overlap counters
+  integer,save :: particle_overlap = 0
+  integer,save :: rock_overlap = 0
+  !> over how many time steps was data accumulated in the counters?
+  integer,save :: overlap_samples = 0
+  !> \}
+
+  !> \{
+  !> \name fluid densities on each lattice site
+  !>
+  !> Values are as they were before the corrections were applied.
+#ifdef SINGLEFLUID
+  real(kind=rk),save,allocatable,dimension(:,:,:) :: rho_r
+#else
+#ifdef NOSURFACTANT
+  real(kind=rk),save,allocatable,dimension(:,:,:) :: rho_r, rho_b
+#else
+  real(kind=rk),save,allocatable,dimension(:,:,:) :: rho_r, rho_b, rho_g
+#endif
+#endif
+  !> \}
+
+#ifdef PARTICLESTRESS
+  !> sectional area at the particle center perpendicular to the three
+  !> local axis directions
+  real(kind=rk),save,public :: A_cut(3)
+#endif
+
+  !> timer for \c update_rock_state()
+  integer,save :: ti_md_fluid_rockstate
+
+  !> timer for \c moving_wall_prebounce()
+  integer,save :: ti_md_fluid_prebounce
+
+  namelist /md_fluid_ladd/ &
+#ifdef LADD_DLUB
+       &clip_frac,contact_friction,contact_stiffness,ding_lubrication,&
+#endif
+       &delta_c,delta_c_T,delta_c_R,initial_radii,lubrication&
+       &,lubrication_clip_dist,lubrication_cox,lubrication_cox_max_store_points&
+       &,lubrication_stiffness,lubrication_tangential,mass_correction&
+       &,n_print_overlap,R_max,R_min,R_orth,R_para,particle_colour,C0&
+       &,n_recalculate_dmg, n_renew_rho,dump_masschange,n_particle_colour_change_start&
+       &,n_particle_colour_change,particle_colour_target&
+       &,dbg_report_mass_correction,stdev_R,Janus_para&
+       &,particle_colour_top,particle_colour_bottom,alpha,n_janus
+
+contains
+
+!> obtain global average of the red fluid density
+!>
+!> \returns average density of the red fluid component
+pure function average_density_r()
+    real(kind=rk) :: average_density_r
+
+    average_density_r = pfr
+end function average_density_r
+
+!> depending on MD substep either apply full Ladd/Aidun particle-fluid
+!> interaction or just update resulting particle forces (if they can
+!> change during a substep)
+!>
+!> \param[in,out] N local lattice chunk with halo of extent \c
+!> halo_extent
+!>
+!> \param[in] substep current md substep count (within \c
+!> 1..steps_per_lbe_step)
+subroutine fluid_ft_interaction_ladd_pre(N,substep)
+  type(lbe_site),intent(inout)&
+       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: substep
+
+  if (substep==1) then
+     call fluid_ft_interaction_ladd_pre_1st(N)
+  else
+     call fluid_ft_interaction_ladd_pre_substep
+  end if
+end subroutine fluid_ft_interaction_ladd_pre
+
+!> apply correction for moving wall bounce back to fluid densities
+!> that will be bounced back at a particle boundary during the next
+!> advection step, write resulting force and torque into the
+!> particles' \c f_fluid and \c t_fluid and then into \c f and \c t
+!>
+!> \param[in,out] N local lattice chunk with halo of extent \c
+!> halo_extent
+!>
+!> \todo Maybe the call to \c keep_current_densities() could be put
+!> somehow into \c update_rock_state() for optimization.
+subroutine fluid_ft_interaction_ladd_pre_1st(N)
+  type(lbe_site),intent(inout)&
+       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer i,ii,oc(2),ocsum(2),ierror
+
+  ! print overlap only each  n_print_overlap  time steps in order to
+  ! save communication and disk space
+  if (n_print_overlap/=0) then
+    overlap_samples = overlap_samples+1
+    if ( check_dump_now(.true.,n_print_overlap) ) then
+      oc = (/particle_overlap,rock_overlap/)
+      call MPI_Reduce(oc,ocsum,2,MPI_INTEGER,MPI_SUM,0,comm_cart,ierror)
+      if (myrankc == 0) then
+        if (any(ocsum>0)) then
+          call log_msg_md("Ladd particle overlap:")
+          write(msgstr,"('  particle:',F16.2,', rock:',F16.2,"&
+               &//"' ( ',I0,' time steps avg)')") &
+               &real(ocsum,kind=rk)/overlap_samples,overlap_samples
+          call log_msg_md(msgstr)
+        end if
+        overlap_samples = 0
+      end if
+      particle_overlap = 0
+      rock_overlap = 0
+    end if
+  end if
+
+  ! Report particle colour if the linear change is enabled
+  if (n_particle_colour_change_start .ge. 0) call print_particle_colour()
+
+  ! Set local mass change variables to zero
+  if (mass_correction) call reset_local_mass_change()
+
+  call stop_timer(ti_md_fluid)
+  call start_timer(ti_md_fluid_rockstate)
+  call update_rock_state(N)
+  call stop_timer(ti_md_fluid_rockstate)
+  call start_timer(ti_md_fluid)
+
+  ! The densities (that is the sum over n_r(:)*g(:) etc.) at a given
+  ! site change while the corrections for several associated boundary
+  ! links are applied, thus they have to be stored here.
+  call keep_current_densities(N)
+
+  ! Due to the possibly fractional z-offset at the Lees-Edwards
+  ! boundary, prebounced populations could evade bounce-back and enter
+  ! the opposite side of the LE plane. To avoid this, store the
+  ! populations at the x-boundary here already, before
+  ! moving_wall_prebounce() .
+  if (md_leesedwards) call le_fill_x_sbufs(N)
+
+#ifdef LADD_DLUB
+  ! list of particle-particle links is recreated in the following
+  ! pre-bounce step
+  call dlub_clear_links
+#endif
+
+  call stop_timer(ti_md_fluid)
+  
+#ifndef INTERPOLATEDBB
+  call start_timer(ti_md_fluid_prebounce)
+  call moving_wall_prebounce(N)
+  call stop_timer(ti_md_fluid_prebounce)
+#endif
+
+#ifdef LADD_DLUB
+  call start_timer(ti_md_fluid_dlubft)
+  ! calculate linkwise lubrication forces
+  if (ding_lubrication) call dlub_force_and_torque
+  call stop_timer(ti_md_fluid_dlubft)
+#endif
+  call start_timer(ti_md_fluid)
+
+  ! Recalculate the global mass change from local mass changes
+  if (mass_correction) call update_global_mass_change(N)
+
+end subroutine fluid_ft_interaction_ladd_pre_1st
+
+!> here, the \c 'ladd' particle-fluid coupling could apply forces and
+!> torques on particles that change during MD substeps
+subroutine fluid_ft_interaction_ladd_pre_substep
+#ifdef LADD_SSD
+  integer i,ii
+
+  i = atompnt
+  do ii = 1,nlocal
+     P(i)%f = P(i)%f &
+          &+ matmul(P(i)%FwF,P(i)%ws-P(i)%ws_fluid_avg) &
+          &- matmul(P(i)%FvF,P(i)%v-P(i)%v_fluid_avg)
+     P(i)%t = P(i)%t &
+          &+ matmul(P(i)%FwT,P(i)%ws-P(i)%ws_fluid_avg) &
+          &- matmul(P(i)%FvT,P(i)%v-P(i)%v_fluid_avg)
+
+     i = list(i)
+  end do
+#endif
+#ifdef LADD_DLUB
+  call stop_timer(ti_md_fluid)
+  call start_timer(ti_md_fluid_dlubft)
+  ! calculate linkwise lubrication forces. The lubrication links are
+  ! still the same as were stored at the beginning of the current LB
+  ! step but the forces will be different because the gap widths and
+  ! particle velocities may have changed.
+  if (ding_lubrication) call dlub_force_and_torque
+  call stop_timer(ti_md_fluid_dlubft)
+  call start_timer(ti_md_fluid)
+#endif
+end subroutine fluid_ft_interaction_ladd_pre_substep
+
+!> fluid in particle has to be changed after streaming but before the
+!> forces are calculated
+subroutine fluid_ft_interaction_ladd_middle(N)
+  type(lbe_site),intent(inout)&
+       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+
+#ifndef SINGLEFLUID
+  CALL update_rock_state_middle(N)
+#endif
+#ifdef INTERPOLATEDBB
+  call curved_wall_prebounce(N)
+#endif
+end subroutine fluid_ft_interaction_ladd_middle
+
+!> stuff that needs to be done for MD \c interaction=='ladd' at the
+!> end of a LB time step, that is, after advection and collision
+!>
+!> \param[in] substep current md substep count (within \c
+!> 1..steps_per_lbe_step)
+subroutine fluid_ft_interaction_ladd_post(N,substep)
+  type(lbe_site),intent(inout)&
+       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: substep
+
+#ifndef SINGLEFLUID
+  if (substep==1) call shan_chen_postbounce(N)
+#endif
+end subroutine fluid_ft_interaction_ladd_post
+
+!> erase all fluid from inside the particles but forget about momentum
+!> conservation calculate all values that depend on \c pfr [,\c pfb,
+!> \c pfg] because they are not available yet in \c setup_fluid_ladd()
+!> when restarting
+subroutine init_fluid_ladd(N)
+  type(lbe_site),intent(inout) &
+       &:: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer :: i,ii
+  real(kind=rk) :: mu
+
+  !get pfr, [pfb, pfg] if we are not restarting
+  if ( .not. is_restoring() ) CALL set_initial_average_density(N)
+
+  ! dynamic viscosity (number-density-weighted average for MC case)
+#ifdef SINGLEFLUID
+  mu = (pfr*amass_r*pfr*(2.0_rk*tau_r-1.0_rk)/6.0_rk)/ &
+      &(pfr)
+#else
+#ifdef NOSURFACTANT
+  mu = (pfr*amass_r*pfr*(2.0_rk*tau_r-1.0_rk)/6.0_rk   &
+      &+pfb*amass_b*pfb*(2.0_rk*tau_b-1.0_rk)/6.0_rk)/ &
+      &(pfr+pfb)
+#else
+  mu = (pfr*amass_r*pfr*(2.0_rk*tau_r-1.0_rk)/6.0_rk   &
+      &+pfb*amass_b*pfb*(2.0_rk*tau_b-1.0_rk)/6.0_rk   &
+      &+pfg*amass_s*pfg*(2.0_rk*tau_s-1.0_rk)/6.0_rk)/ &
+      &(pfr+pfb+pfg)
+#endif
+#endif
+
+  inv_delta_c = 1.0_rk/delta_c
+  log_delta_c_T = log(delta_c_T)
+  log_delta_c_R = log(delta_c_R)
+  pi3muRsq_2 = 3.0_rk*pi*mu*ubound_R**2/2.0_rk
+  pimuR = pi*mu*ubound_R
+  pimuRsq = pimuR*ubound_R
+  pi8muRcu_5 = pimuRsq*ubound_R*8.0_rk/5.0_rk
+  pi6muRLsqRRsq_RLpRRsq = 6.0_rk*pi*mu*ubound_R**2*R_rock**2/RLpRR**2
+  pi3mud8 = 3.0_rk*pi*mu/8.0_rk
+
+  call register_timer('MD:Fluid:Rockstate',ti_md_fluid_rockstate)
+  call register_timer('MD:Fluid:Prebounce',ti_md_fluid_prebounce)
+
+#ifdef LADD_DLUB
+  call dlub_setup
+#endif
+
+  ! after checkpoint restoration everything is just fine already
+  no_restore: if ( .not. is_restoring() ) then
+    ! this also initializes the halo as far as it is needed for
+    !  lbe_md_fluid_ladd_module
+    CALL update_rock_state(N)
+
+    call calculate_total_mass(N, global_mass_target)
+
+    ! resulting forces are ignored
+    i = atompnt
+    particles: do ii = 1,nlocal+nother
+      P(i)%f_fluid = 0.0_rk
+      P(i)%t_fluid = 0.0_rk
+#ifdef LADD_SURR_RHOF
+      ! use avg pressure as initial value for each particle's
+      ! surrounding one
+      P(i)%rhof = pfr
+#endif
+
+      if (ii.le.nlocal) then
+        i = list(i)
+      else
+        i = i + 1
+      endif
+    enddo particles
+  end if no_restore
+end subroutine init_fluid_ladd
+
+!> assign to all particles half-axes parallel and perpendicular to
+!> their symmetry axis that each follow a normal distribution around
+!> the input parameters \c R_para and \c R_orth, respectively with a
+!> standard deviation of \c stdev_R times the respective radius. Half
+!> axes not within the range [\c R_min , \c R_max ] are clipped which
+!> means that the actual distribution will have a lower standard
+!> deviation.
+subroutine init_radii_normal()
+    real(kind=rk) :: r(2)
+    integer :: i,ii
+
+    i = atompnt
+    do ii = 1,nlocal
+       do
+          call gaussianBoxMuller(r(1),r(2))
+          P(i)%R_orth = R_orth * (1.0 + stdev_R*r(1))
+          P(i)%R_para = R_para * (1.0 + stdev_R*r(1))
+
+          if (P(i)%R_para>=R_min.and.P(i)%R_para<=R_max&
+               &.and.P(i)%R_orth>=R_min.and.P(i)%R_orth<=R_max) exit
+       end do
+
+       i = list(i)
+    enddo
+end subroutine init_radii_normal
+
+!> assign to all particles random half-axes from the range [\c R_min ,
+!> \c R_max ]
+subroutine init_radii_random()
+    real(kind=rk) :: r(2)
+    integer :: i,ii
+
+    i = atompnt
+    do ii = 1,nlocal
+       call ranlux(r,2)
+       P(i)%R_orth = R_min + r(1)*(R_max-R_min)
+       P(i)%R_para = R_min + r(2)*(R_max-R_min)
+
+       i = list(i)
+    enddo
+end subroutine init_radii_random
+
+!> assign to all particles random half-axes from the range [\c R_min ,
+!> \c R_max ] while keeping the volume constant at that defined by \c
+!> R_orth and \c R_para
+subroutine init_radii_volume()
+    real(kind=rk) :: r(1),v
+    integer :: i,ii
+
+    v = R_para * R_orth**2
+
+    i = atompnt
+    do ii = 1,nlocal
+       do
+          call ranlux(r,1)
+          P(i)%R_orth = R_min + r(1)*(R_max-R_min)
+          P(i)%R_para = v / P(i)%R_orth**2
+
+          if (P(i)%R_para>=R_min.and.P(i)%R_para<=R_max) exit
+       end do
+
+       i = list(i)
+    enddo
+end subroutine init_radii_volume
+
+!> read  \c /md_fluid_ladd/
+subroutine input_fluid_ladd
+  integer ierror
+
+  call log_msg_md_hdr("Reading MD F Ladd input")
+
+  ! These features are essential for this coupling module. They are
+  ! enabled here because in  setup_fluid_ladd()  it would be too late.
+  use_rotation = .true.
+  calculate_orientations = .true.
+  communicate_velocities = .true.
+  communicate_rotations_s = .true.
+  communicate_uids = .true.
+  collect_forces = .true.
+  use_ft_fluid = .true.
+  if (steps_per_lbe_step/=1) decouple_fluid = .true.
+
+  if (myrankc.eq.0) then
+    open (UNIT = md_input_file_unit, FILE = trim(inp_file)//'.md', STATUS = 'UNKNOWN')
+    read (UNIT = md_input_file_unit, NML = md_fluid_ladd)
+    close(UNIT = md_input_file_unit)
+  endif
+
+  if ( arg_input_dfile_set ) then
+    call log_msg_md("  Getting differential input...")
+    open(UNIT = input_dfile_unit, FILE = arg_input_dfile, STATUS = 'UNKNOWN')
+    read(UNIT = input_dfile_unit, NML = md_fluid_ladd, IOSTAT = ierror)
+    if (ierror .ne. 0) then
+      call log_msg_md("    WARNING: Differential namelist not found or errors encountered.")
+    endif
+    close(UNIT = input_dfile_unit)
+    call log_ws()
+  end if
+
+  if (initial_radii/='random') then
+     write(msgstr,"('R_orth                 = ',F16.10)") R_orth
+     call log_msg(msgstr)
+     write(msgstr,"('R_para                 = ',F16.10)") R_para
+     call log_msg(msgstr)
+  end if
+  write(msgstr,"('initial_radii          = <',A,'>')") trim(initial_radii)
+  call log_msg(msgstr)
+  if (initial_radii/='none') then
+     write(msgstr,"('  R_max                = ',F16.10)") R_max
+     call log_msg(msgstr)
+     write(msgstr,"('  R_min                = ',F16.10)") R_min
+     call log_msg(msgstr)
+  end if
+  if (initial_radii=='normal') then
+     write(msgstr,"('  stdev_R              = ',F16.10)") stdev_R
+     call log_msg(msgstr)
+  end if
+
+  write(msgstr,"('lubrication            = ',L1)") lubrication
+  call log_msg(msgstr)
+  write(msgstr,"('delta_c                = ',F16.10)") delta_c
+  call log_msg(msgstr)
+  write(msgstr,"('delta_c_T              = ',F16.10)") delta_c_T
+  call log_msg(msgstr)
+  write(msgstr,"('delta_c_R              = ',F16.10)") delta_c_R
+  call log_msg(msgstr)
+  write(msgstr,"('lubrication_clip_dist  = ',F16.10)") lubrication_clip_dist
+  call log_msg(msgstr)
+  write(msgstr,"('lubrication_stiffness  = ',F16.10)") lubrication_stiffness
+  call log_msg(msgstr)
+  write(msgstr,"('lubrication_tangential = ',L1)") lubrication_tangential
+  call log_msg(msgstr)
+  write(msgstr,"('lubrication_cox        = ',L1)") lubrication_cox
+  CALL log_msg(msgstr)
+  write(msgstr,"('lubrication_cox_max_store_points = ',I0)") &
+       &lubrication_cox_max_store_points
+  CALL log_msg(msgstr)
+#ifdef LADD_DLUB
+  write(msgstr,"('ding_lubrication       = ',L1)") ding_lubrication
+  CALL log_msg(msgstr)
+  write(msgstr,"('clip_frac              = ',F16.10)") clip_frac
+  CALL log_msg(msgstr)
+  write(msgstr,"('contact_stiffness      = ',F16.10)") contact_stiffness
+  CALL log_msg(msgstr)
+  write(msgstr,"('contact_friction       = ',F16.10)") contact_friction
+  CALL log_msg(msgstr)
+#endif
+  write(msgstr,"('mass_correction        = ',L1)") mass_correction
+  call log_msg(msgstr)
+  if (mass_correction) then
+    write(msgstr,"('  C0                   = ',F16.10)") C0
+    call log_msg(msgstr)
+    write(msgstr,"('  n_recalculate_dmg    = ',I0)") n_recalculate_dmg
+    call log_msg(msgstr)
+    write(msgstr,"('  n_renew_rho    = ',I0)") n_renew_rho
+    call log_msg(msgstr)
+    write(msgstr,"('  dump_masschange      = ',L1)") dump_masschange
+    call log_msg(msgstr)
+    write(msgstr,"('max_mc             = ',F16.10)") max_mc
+    call log_msg(msgstr)
+    if ( dbg_report_mass_correction ) then
+      write(msgstr,"('  dbg_report_mass_correction = ',L1)") dbg_report_mass_correction
+      call log_msg(msgstr)
+    end if
+  end if
+  write(msgstr,"('particle_colour        = ',F16.10)") particle_colour
+  call log_msg(msgstr)
+
+  if (n_particle_colour_change_start .ge. 0) then
+    write(msgstr,"('particle_colour_target         = ',F16.10)") particle_colour_target
+    call log_msg(msgstr)
+    write(msgstr,"('n_particle_colour_change_start = ',I0)") n_particle_colour_change_start
+    call log_msg(msgstr)
+    write(msgstr,"('n_particle_colour_change       = ',I0)") n_particle_colour_change
+    call log_msg(msgstr)
+  end if
+
+  write(msgstr,"('n_print_overlap        = ',I0)") n_print_overlap
+  call log_msg(msgstr)
+
+  write(msgstr,"('Janus_para            = ',L1)") Janus_para
+  call log_msg(msgstr)
+  write(msgstr,"('particle_colour_top        = ',F16.10)") particle_colour_top
+  call log_msg(msgstr)
+  write(msgstr,"('particle_colour_bottom        = ',F16.10)") particle_colour_bottom
+  call log_msg(msgstr)
+  write(msgstr,"('alpha        = ',F16.10)") alpha
+  call log_msg(msgstr)
+  write(msgstr,"('n_janus        = ',F16.10)") n_janus
+  call log_msg(msgstr)
+
+
+  call log_ws()
+
+  call MPI_Bcast(R_orth,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(R_para,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(initial_radii,32,MPI_CHARACTER,0,comm_cart,ierror)
+  call MPI_Bcast(R_max,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(R_min,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(stdev_R,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(lubrication,1,MPI_LOGICAL,0,comm_cart,ierror)
+  call MPI_Bcast(delta_c,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(delta_c_T,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(delta_c_R,1,MPI_REAL8,0,comm_cart,ierror)
+  CALL MPI_Bcast(lubrication_clip_dist,1,MPI_REAL8,0,comm_cart,ierror)
+  CALL MPI_Bcast(lubrication_stiffness,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(lubrication_tangential,1,MPI_LOGICAL,0,comm_cart,ierror)
+  CALL MPI_Bcast(lubrication_cox,1,MPI_LOGICAL,0,comm_cart,ierror)
+  call MPI_Bcast(lubrication_cox_max_store_points,1,MPI_INTEGER,0,comm_cart&
+       &,ierror)
+#ifdef LADD_DLUB
+  CALL MPI_Bcast(ding_lubrication,1,MPI_LOGICAL,0,comm_cart,ierror)
+  CALL MPI_Bcast(clip_frac,1,MPI_REAL8,0,comm_cart,ierror)
+  CALL MPI_Bcast(contact_stiffness,1,MPI_REAL8,0,comm_cart,ierror)
+  CALL MPI_Bcast(contact_friction,1,MPI_REAL8,0,comm_cart,ierror)
+#endif
+  call MPI_Bcast(mass_correction,1,MPI_LOGICAL,0,comm_cart,ierror)
+  call MPI_Bcast(C0,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(n_recalculate_dmg,1,MPI_INTEGER,0,comm_cart,ierror)
+  call MPI_Bcast(n_renew_rho,1,MPI_INTEGER,0,comm_cart,ierror)
+  call MPI_Bcast(dump_masschange,1,MPI_LOGICAL,0,comm_cart,ierror)
+  call MPI_Bcast(max_mc,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(dbg_report_mass_correction,1,MPI_LOGICAL,0,comm_cart,ierror)
+  call MPI_Bcast(particle_colour,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(particle_colour_target,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(n_particle_colour_change_start,1,MPI_INTEGER,0,comm_cart,ierror)
+  call MPI_Bcast(n_particle_colour_change,1,MPI_INTEGER,0,comm_cart,ierror)
+  call MPI_Bcast(n_print_overlap,1,MPI_INTEGER,0,comm_cart,ierror)
+
+  call MPI_Bcast(Janus_para,1,MPI_LOGICAL,0,comm_cart,ierror)
+  call MPI_Bcast(particle_colour_top,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(particle_colour_bottom,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(alpha,1,MPI_REAL8,0,comm_cart,ierror)
+  call MPI_Bcast(n_janus,1,MPI_REAL8,0,comm_cart,ierror)
+
+  if (initial_radii/='none') polydispersity = .true.
+
+  ! Also this has to be initialized before  setup_fluid_ladd() because
+  !  rc_lubrication_particle  and  rc_lubrication_rock  have to be
+  ! available for the setup routines of particle and rock potentials.
+  ubound_R = maximum_particle_radius()
+  twoR = 2.0_rk*ubound_R
+  RLpRR = ubound_R+R_rock
+  rc_lubrication_particle = max(delta_c,delta_c_T,delta_c_R)+twoR
+  rc_lubrication_rock = max(delta_c,delta_c_T,delta_c_R)+RLpRR
+end subroutine input_fluid_ladd
+
+!> Returns the local velocity at a given position of a finite-size
+!> particle according to its rigid-body motion.
+!>
+!> \param[in] vpos position for which velocity should be obtained
+!> (local coordinates)
+!>
+!> \param[in] uid unique ID number of the particle
+!>
+!> \returns particle velocity at \c vpos, taking into account the
+!> possible translation and rotation of the particle
+function local_particle_velocity(vpos,uid)
+  real(kind=rk) :: local_particle_velocity(3)
+  real(kind=rk),intent(in) :: vpos(3)
+  integer,intent(in) :: uid
+  integer :: i
+  real(kind=rk) :: gvpos(3),center(3)
+
+  ! convert to global coordinates
+  gvpos = vpos+real(start-1,kind=rk)
+
+  i = Mii_map(uid2i,uid)
+  center = closest_image(P(i)%x,gvpos)
+
+  local_particle_velocity &
+       &= P(i)%v_fluid_avg + cross_product(P(i)%ws_fluid_avg,gvpos-center)
+end function local_particle_velocity
+
+!> calculate sub-lattice lubrication interactions for a pair of particles
+!>
+!> This routine is supposed to be called from the MD particle pair
+!> potential interaction routines and branches into the respective
+!> lubrication model, depending on the input file settings. The
+!> link-wise \c ding_lubrication, however, is computed elsewhere
+!> separately. If both particles are owned by the same cpu, the
+!> resulting forces and/or torques are applied to both of them,
+!> otherwise only to particle \c i.
+!>
+!> \param[in] rij2 squared minimum image distance
+!>
+!> \param[in] rij minimum image vector from particle \c j to \c i
+!>
+!> \param[in] i first particle index in \c P
+!>
+!> \param[in] j second particle index in \c P
+subroutine particle_lubrication(rij2,rij,i,j)
+    real(kind=rk),intent(in) :: rij2,rij(3)
+    integer,intent(in) :: i,j
+
+    if (rij2<rclsq_particle) then
+       if (lubrication_cox) then
+          call club_force_and_torque(rij2,rij,i,j)
+       else
+          if (R_orth==R_para) then
+             call lubrication_force_particle(rij2,rij,i,j)
+          else
+             call lubrication_force_ellipsoid_particle(rij2,rij,i,j)
+          end if
+       end if
+    end if
+end subroutine particle_lubrication
+
+!> rescales all length parameters involved in lubrication interactions
+!>
+!> \param[in] f linear length scale factor with respect to original
+!> lengths read from input file
+subroutine set_growth_factor_particle_lubrication(f)
+    real(kind=rk),intent(in) :: f
+
+    if (lubrication_cox) then
+       call club_set_growth_factor(f)
+    else
+       call error_md('set_growth_factor_particle_lubrication() implemented '&
+            &//'only for lubrication_cox---disable growing_stage or enable '&
+            &//'lubrication_cox')
+    end if
+end subroutine set_growth_factor_particle_lubrication
+
+!> calculate lubrication forces for particles with indices \c i and \c j in
+!> \c P(:) .
+!>
+!> Their minimum image distance is \c rij=P(i)%x-P(j)%x and its square is
+!> \c rij2 . Newton's 3rd law is taken into account if both particles are
+!> owned by the same cpu.
+subroutine lubrication_force_particle(rij2,rij,i,j)
+  real(kind=rk),intent(in) :: rij2,rij(3)
+  integer,intent(in) :: i,j
+  real(kind=rk) :: arij,f(3),div_T,div_R,f_lub,f_rep,gap,urij(3),t(3),vn
+  real(kind=rk) :: vij(3),vtij(3),vttij(3),wsij(3),wstij(3),wsttij(3)
+
+  arij = sqrt(rij2)
+
+  ! normal direction from j to i
+  urij = rij/arij
+
+  ! relative velocity
+  vij = P(i)%v-P(j)%v
+
+  ! normal velocity component
+  vn = dot_product(urij,vij)
+
+  gap = arij-twoR
+  if (gap<lubrication_clip_dist) then
+     f_rep = lubrication_stiffness*(lubrication_clip_dist-max(0.0_rk,gap))
+  else
+     f_rep = 0.0_rk
+  end if
+  gap = max(gap,lubrication_clip_dist)
+  if (gap<delta_c) then
+     f_lub = pi3muRsq_2*vn*(inv_delta_c-1.0_rk/gap)
+  else
+     f_lub = 0.0_rk
+  end if
+  f = urij*(f_lub+f_rep)
+
+  if (lubrication_tangential) then
+     t = 0.0_rk
+
+     if (gap<delta_c_T) then
+        ! logarithmic divergence term for translation, relative to
+        ! its value at delta_c_T
+        div_T = log_delta_c_T-log(gap)
+
+        vtij = vij-urij*vn       ! tangential part of vij
+
+        ! vtij in direction of associated torque
+        vttij = cross_product(urij,vtij)
+
+        ! tangential force due to vtij (Kim&Karrila, 1991; eq. 9.24)
+        f = f - vtij*pimuR*div_T
+
+        ! torque due to vtij (Kim&Karrila, 1991; eq. 9.25)
+        t = t + vttij*pimuRsq*div_T
+     end if
+
+     if (gap<delta_c_R) then
+        ! logarithmic divergence term for rotation, relative to its
+        ! value at delta_c_R
+        div_R = log_delta_c_R-log(gap)
+
+        ! Kim&Karrila chose the particle center as pivot for
+        ! ws. This means that every ws causes not only rolling but
+        ! also tangential motion at the gap which is accounted for
+        ! in the resulting force and torque. Still, the relation
+        ! remains linear in ws. This should allow for a computation
+        ! here as a linear function of ws(i)+ws(j), representing the
+        ! superposition of the possible rotations of both spheres.
+
+        wsij = P(i)%ws+P(j)%ws
+
+        ! tangential part of wsij (the part in line with urij does
+        ! not lead to divergence, see Cox, 1974; eq. 7.10)
+        wstij = wsij-urij*dot_product(urij,wsij)
+
+        ! wstij in direction of associated force
+        wsttij = cross_product(wstij,urij)
+
+        ! tangential force due to wstij (Kim&Karrila, 1991; eq. 9.26)
+        f = f + wsttij*pimuRsq*div_R
+
+        ! torque due to wstij (Kim&Karrila, 1991; eq. 9.27)
+        t = t - wstij*pi8muRcu_5*div_R
+     end if
+
+     P(i)%t = P(i)%t + t
+     if (j<=npmax) P(j)%t = P(j)%t + t
+  end if
+
+  P(i)%f = P(i)%f + f
+  if (j.le.npmax) P(j)%f = P(j)%f - f
+end subroutine lubrication_force_particle
+
+subroutine lubrication_force_ellipsoid_particle(rij2,rij,i,j)
+  real(kind=rk),intent(in) :: rij2,rij(3)
+  integer,intent(in) :: i,j
+  real(kind=rk) :: arij,f(3),urij(3)
+  real(kind=rk) :: e,omxoioj,opxoioj,xoioj,rijoiprijoj,rijoimrijoj,sqrt1&
+       &,sqrt2,fracp,fracm,r,chi,sigma,eps,rijoi&
+       &,chi_half,rijoj
+
+  arij = sqrt(rij2)
+  urij = rij/arij
+  chi= (R_para**2-R_orth**2)/(R_para**2+R_orth**2)
+  sigma=2*R_orth
+  !eps=(3*pi*mu/8)*sigma
+  !eps=(3.0_rk*pi*mu/8.0_rk)*sigma
+  !eps=1.0_rk
+  !eps=sigma*pi
+  !eps=(3pimud8)*sigma
+  !eps=3pimud8*sigma
+  eps=pi3mud8*sigma
+
+  ! dot products of rij and o(i|j)
+  rijoi = dot_product(rij,P(i)%o)
+  rijoj = dot_product(rij,P(j)%o)
+  ! \chi(\mathbf{o}_i\mathbf{o}_j)
+  xoioj = chi*dot_product(P(i)%o,P(j)%o)
+  ! \mathbf{r}_{ij}\mathbf{o}_i\pm\mathbf{r}_{ij}\mathbf{o}_j)
+  ! ----------------------------------------------------------
+  !              1\pm\chi\mathbf{o}_i\mathbf{o}_j
+  rijoiprijoj = rijoi+rijoj
+  rijoimrijoj = rijoi-rijoj
+  omxoioj = 1.0_rk-xoioj
+  opxoioj = 1.0_rk+xoioj
+  fracp = rijoiprijoj/opxoioj
+  fracm = rijoimrijoj/omxoioj
+  chi_half = 0.5_rk*chi
+  sqrt2 = 1.0_rk&
+       &-(rijoiprijoj*fracp+rijoimrijoj*fracm)*chi_half/rij2
+  sqrt1=sqrt(sqrt2)
+  r = arij*sqrt1/sigma
+  ! \chi(\mathbf{o}_i\mathbf{o}_j)
+  xoioj = chi*dot_product(P(i)%o,P(j)%o)
+  e = eps/sqrt(omxoioj*opxoioj)
+  f = e*urij*dot_product(urij,P(i)%v-P(j)%v)&
+       &*(inv_delta_c*sigma/sqrt1-1.0_rk/&
+       &(max(r-1.0_rk,delta_c*sqrt1/(100.0_rk*sigma))))
+  P(i)%f = P(i)%f + f
+  if (j.le.npmax) P(j)%f = P(j)%f - f
+end subroutine lubrication_force_ellipsoid_particle
+
+!> calculate lubrication forces for particle with index \c i in \c P(:) and
+!> a rock node.
+!>
+!> Their minimum image distance is \c rij=P(i)%x-x_r and its square is
+!> \c rij2 .
+subroutine lubrication_force_rock(rij2,rij,i)
+  real(kind=rk),intent(in) :: rij2,rij(3)
+  integer,intent(in) :: i
+  real(kind=rk) :: arij,f(3),urij(3)
+
+  if (rij2<rclsq_rock) then
+    arij = sqrt(rij2)
+    urij = rij/arij
+    f = pi6muRLsqRRsq_RLpRRsq*urij*dot_product(urij,P(i)%v)&
+        &*(inv_delta_c-1.0_rk/(max(arij-RLpRR,delta_c/100.0_rk)))
+    P(i)%f = P(i)%f + f
+  end if
+end subroutine lubrication_force_rock
+
+#ifdef PARTICLESTRESS
+!> accumulate the stresses felt by particle \c i resulting from force
+!> \c fb at position \c rb relative to the particle center (both in
+!> space-fixed frame) in \c P(i)%tau
+subroutine accumulate_stress(i,rb,fb)
+  integer,intent(in) :: i
+  real(kind=rk),intent(in) :: rb(3),fb(3)
+  real(kind=rk),parameter :: small=1.0e-12_rk
+  real(kind=rk) :: A(3,3),fb_b(3),rb_b(3)
+
+  ! transformation from space fixed to body fixed
+  A = reshape((/&
+       &P(i)%q(0)**2+P(i)%q(1)**2-P(i)%q(2)**2-P(i)%q(3)**2,&
+       &2.0_rk*(P(i)%q(1)*P(i)%q(2)-P(i)%q(0)*P(i)%q(3)),&
+       &2.0_rk*(P(i)%q(1)*P(i)%q(3)+P(i)%q(0)*P(i)%q(2)),&
+       
+       &2.0_rk*(P(i)%q(1)*P(i)%q(2)+P(i)%q(0)*P(i)%q(3)),&
+       &P(i)%q(0)**2-P(i)%q(1)**2+P(i)%q(2)**2-P(i)%q(3)**2,&
+       &2.0_rk*(P(i)%q(2)*P(i)%q(3)-P(i)%q(0)*P(i)%q(1)),&
+       
+       &2.0_rk*(P(i)%q(1)*P(i)%q(3)-P(i)%q(0)*P(i)%q(2)),&
+       &2.0_rk*(P(i)%q(2)*P(i)%q(3)+P(i)%q(0)*P(i)%q(1)),&
+       &P(i)%q(0)**2-P(i)%q(1)**2-P(i)%q(2)**2+P(i)%q(3)**2&
+       &/),&
+       &(/3,3/))
+  rb_b = matmul(A,rb)    ! body fixed vector to interaction point
+  fb_b = matmul(A,fb)    ! body fixed force
+
+  ! Due to the discrete character of the whole method and the
+  ! fact that all calculations are performed numerically,
+  ! unexpected results can happen for values of rb_b(k) around
+  ! 0. Therefore, the respective forces are ignored for stress
+  ! calculation which is no problem, since the sign of their
+  ! contribution is highly questionable anyway.
+  if (abs(rb_b(1))>small) then
+    P(i)%tau(1,:) = P(i)%tau(1,:) + fb_b(:)*sign(1.0_rk,rb_b(1))
+  end if
+  if (abs(rb_b(2))>small) then
+    P(i)%tau(2,:) = P(i)%tau(2,:) + fb_b(:)*sign(1.0_rk,rb_b(2))
+  end if
+  if (abs(rb_b(3))>small) then
+    P(i)%tau(3,:) = P(i)%tau(3,:) + fb_b(:)*sign(1.0_rk,rb_b(3))
+  end if
+end subroutine accumulate_stress
+#endif
+
+!> enable required features, calculate constants, change solid rock's
+!> rock_state to a value that does not conflict with particle uids used
+!> by this module to mark moving rock, check input parameters, allocate
+!> memory
+subroutine setup_fluid_ladd(N)
+  type(lbe_site),intent(inout) ::&
+       & N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer stat
+
+  provide_uid2i = .true.
+#ifndef SINGLEFLUID
+  ! request an halo exchange after updating the fluid inside the
+  ! particle in fluid_ft_interaction_ladd_middle
+  halo_exchange_after_md_run_middle=.true.
+#endif
+
+  Rosq = R_orth**2
+  RosqbyRpsq = Rosq/R_para**2
+
+  if (R_orth > 2.0_rk ) then
+    Ro2sq = (R_orth - 2.0_rk )**2
+  else
+    Ro2sq = 0.0_rk
+  end if
+
+  if (R_para > 2.0_rk ) then
+    Rp2sq = (R_para - 2.0_rk )**2
+  else
+    Rp2sq = 0.0_rk
+  end if
+
+  rclsq_particle = rc_lubrication_particle**2
+  rclsq_rock = rc_lubrication_rock**2
+
+  call boltz_dist(0.0_rk,0.0_rk,0.0_rk,0.0_rk,0.0_rk,0.0_rk,0.0_rk,0.0_rk&
+       &,0.0_rk,n_eq_u0)
+#ifdef PARTICLESTRESS
+  A_cut(1:2) = pi*R_orth*R_para
+  A_cut(3) = pi*R_orth*R_orth
+#endif
+
+  if (lubrication_cox) call club_setup()
+
+  ! do not destroy the rockstate already changed read from a checkpoint
+  no_restore: if ( .not. is_restoring() ) then
+    where (N%rock_state/=0.0_rk) N%rock_state = -1.0_rk
+  end if no_restore
+
+  if (myrankc==0) then
+    if (rc<=ubound_R+0.5_rk) then
+      write(msgstr&
+           &,"('rc = ',F16.10,', R_orth = ',F16.10,', R_para = ',F16.10)")&
+           & rc, R_orth, R_para
+      call log_msg_md(msgstr)
+      call error_md('setup_fluid_ladd(): '&
+           &//'rc must be greater than max(R_orth,R_para)+0.5')
+    end if
+#ifdef LADD_DLUB
+    ! demand 0.5 site larger rc for substepping and dlub for
+    ! safety. Otherwise, particles could move outside of rc (and
+    ! consequently uid2i) during the substeps and lubrication forces
+    ! could not be calculated anymore. Since no particle should move
+    ! with a velocty of 0.5, demanding 0.5 additional rc seems pretty
+    ! save.
+    if (steps_per_lbe_step/=1.and.rc<=ubound_R+1.0_rk) call error_md(&
+         &'setup_fluid_ladd(): LADD_DLUB with steps_per_lbe_step>1 demands '&
+         &//'increased rc for safety---set rc>max(R_orth,R_para)+1')
+
+    if (lubrication.and.ding_lubrication) call error_md('setup_fluid_ladd(): '&
+         &//'Not more than one of (/lubrication,ding_lubrication/) must be '&
+         &//'enabled---set one of them to .false.')
+#endif
+    if (lubrication.and.rc<rc_lubrication_particle) then
+      write(msgstr,"('rc = ',F16.10,', rc_lubrication_particle = ',F16.10)") &
+          & rc, rc_lubrication_particle
+      call log_msg_md(msgstr)
+      call error_md('rc too small! '&
+           &//'(rc<rc_lubrication_particle but lubrication==.true.')
+    end if
+    if (lubrication_clip_dist<=0) call error_md('lubrication_clip_dist is '&
+         &//'zero or smaller---choose lubrication_clip_dist>0')
+    if (lubrication_tangential.and.R_orth/=R_para.and..not.lubrication_cox) &
+         &call error_md('Tangential lubrication interactions for '&
+         &//'non-spherical particles implemented only in '&
+         &//'lubrication_cox---set R_orth=R_para, '&
+         &//'lubrication_tangential=.false., or lubrication_cox=.true.')
+    if (polydispersity.and.lubrication.and..not.lubrication_cox) &
+         &call error_md("The only lubrication model that supports "&
+         &//'polydisperse particles at them moment is lubrication_cox'&
+         &//'---disable polydispersity, set lubrication=.false., or '&
+         &//'lubrication_cox=.true.!')
+
+    if (lubrication.and.R_orth/=R_para.and..not.lubrication_cox) then
+      call warning('spherical lubrication force correction activated for '&
+          &//'ellipsoidal particle---consider using lubrication_cox')
+    end if
+  endif
+
+#ifdef SINGLEFLUID
+  allocate (rho_r(1:nx,1:ny,1:nz),stat=stat)
+  call check_allocate(stat,'setup_fluid_ladd(): rho_r')
+#else
+#ifdef LADD_SURR_RHOF
+  call error_md('At the moment, LADD_SURR_RHOF requires SINGLEFLUID.')
+#endif
+#ifdef LADD_DLUB
+  call error_md('At the moment, LADD_DLUB requires SINGLEFLUID.')
+#endif
+#ifdef NOSURFACTANT
+  allocate (rho_r(1:nx,1:ny,1:nz),rho_b(1:nx,1:ny,1:nz),stat=stat)
+  call check_allocate(stat,'setup_fluid_ladd(): rho_r, rho_b')
+#else
+  allocate (rho_r(1:nx,1:ny,1:nz),rho_b(1:nx,1:ny,1:nz),rho_g(1:nx,1:ny,1:nz)&
+       &,stat=stat)
+  call check_allocate(stat,'setup_fluid_ladd(): rho_r, rho_b, rho_g')
+#endif
+#endif
+#ifdef LADD_SSD
+  if (nprocs/=1) call error_md(&
+       &'Experimental feature LADD_SSD is not parallelized yet'&
+       &//'---restart simulation serially or compile without LADD_SSD!'&
+       &//' (also momentum is not conserved...)')
+#endif
+#ifdef LADD_GALILEAN
+  if (.not.any(bdist==(/3,4/))) call error('LADD_GALILEAN assumes 2nd order '&
+       &//'equilibrium distribution function---set bdist to 3 or 4 !')
+#endif
+end subroutine setup_fluid_ladd
+
+!> free memory
+subroutine shutdown_fluid_ladd
+#ifdef SINGLEFLUID
+  deallocate(rho_r)
+#else
+#ifdef NOSURFACTANT
+  deallocate(rho_r, rho_b)
+#else
+  deallocate(rho_r, rho_b, rho_g)
+#endif
+#endif
+end subroutine shutdown_fluid_ladd
+
+!> writes conclusion concerning Ladd particle-fluid interaction
+!>
+!> \param[in] units vector of output units to which information is
+!> printed
+subroutine summary_fluid_ladd(units)
+    integer,intent(in) :: units(:)
+
+    if (lubrication_cox) call club_summary_fluid(units)
+end subroutine summary_fluid_ladd
+
+!> Create or destroy rock sites when a particle volume covers or
+!> uncovers them.
+!>
+!> Every change causes a force and torque on the corresponding
+!> particle. pbc and the will to save one halo exchange both make the
+!> work quite tedious...
+subroutine update_rock_state(N)
+  type(lbe_site),intent(inout) :: &
+       &N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer i,j,ii,x,y,z      ! loop indices
+  integer :: n_c,n_ci,n_ch
+  type(local_chunk_type) :: c(n_max_local_chunks),ci(n_max_local_chunks)&
+       &,ch(6*n_max_local_chunks)
+
+#ifndef SINGLEFLUID
+  ! in multi-component case, update_node_1() for all particles needs
+  ! to be finished before update_node_2() is called.
+  call Mii_rewind(uid2i)
+  preferred_update_1: do ii = 1,Mii_count(uid2i)
+    i = Mii_cur_value(uid2i)
+
+    ! this could be optimized by choosing the respective particle's
+    ! R_max in case of polydispersity instead of ubound_R
+    call local_chunks(P(i),ubound_R,0,n_c,c)
+    do j=1,n_c
+      do x=c(j)%minx(1),c(j)%maxx(1)
+        do y=c(j)%minx(2),c(j)%maxx(2)
+          do z=c(j)%minx(3),c(j)%maxx(3)
+            call update_node_1(N,i,c(j)%xc(1),c(j)%xc(2),c(j)%xc(3),x,y,z)
+          end do
+        end do
+      end do
+    end do
+
+    call Mii_step(uid2i)
+  end do preferred_update_1
+#endif
+
+  ! loop through own and halo'ed particles---choose uid as a well
+  ! defined order to loop through own and haloed particles that is the
+  ! same on every process.
+  call Mii_rewind(uid2i)
+  update_particles: do ii = 1,Mii_count(uid2i)
+    i = Mii_cur_value(uid2i)
+
+    ! this could be optimized by choosing the respective particle's
+    ! R_max in case of polydispersity instead of ubound_R
+    call local_chunks(P(i),ubound_R,1,n_c,c)
+    call copy_clip_chunks_to_real_sites(n_c,c,n_ci,ci)
+    call copy_split_chunks_into_halo_intersections(n_c,c,n_ch,ch)
+
+    ! Update the regular, then the halo sites. Updating the halo sites
+    ! is probably cheaper than one more halo exchange. It is
+    ! sufficient to update only rock_state and only at the first halo
+    ! layer independently on halo_extent because nothing else will be
+    ! read from the halo nodes in moving_wall_prebounce() .
+    do j=1,n_ci
+      do x=ci(j)%minx(1),ci(j)%maxx(1)
+        do y=ci(j)%minx(2),ci(j)%maxx(2)
+          do z=ci(j)%minx(3),ci(j)%maxx(3)
+#ifdef SINGLEFLUID
+            call update_node_1&
+                 &(N,i,ci(j)%xc(1),ci(j)%xc(2),ci(j)%xc(3),x,y,z)
+#endif
+            call update_node_2&
+                 &(N,i,ci(j)%xc(1),ci(j)%xc(2),ci(j)%xc(3),x,y,z)
+          end do
+        end do
+      end do
+    end do
+
+    ! Update the up to 8 non-halo parts of the box that might have
+    ! intersections with the local chunk.
+    do j=1,n_ch
+      do x=ch(j)%minx(1),ch(j)%maxx(1)
+        do y=ch(j)%minx(2),ch(j)%maxx(2)
+          do z=ch(j)%minx(3),ch(j)%maxx(3)
+            call update_halo_node(N,i,ch(j)%xc(1),ch(j)%xc(2),ch(j)%xc(3)&
+                 &,x,y,z)
+          end do
+        end do
+      end do
+    end do
+
+#ifdef INTERPOLATEDBB
+    ! Bouzidi linear Interpolation scheme
+    !
+    ! fluid nodes               wall  solid node
+    ! --o-------<-o->-----<-o->--|----x----
+    !            xB         x        xN
+    if(nt<1) then
+      write(*,"('calculating fractional distance !!! ')") 
+!      write(msgstr,"('calculating fractional distance !!! ')") 
+!      call log_msg(msgstr)
+    do j=1,n_ci
+      do x=ci(j)%minx(1),ci(j)%maxx(1)
+        do y=ci(j)%minx(2),ci(j)%maxx(2)
+          do z=ci(j)%minx(3),ci(j)%maxx(3)
+            call fractionaldist(N,P(i),(/ci(j)%xc(1),ci(j)%xc(2),ci(j)%xc(3)/),x,y,z)
+          end do
+        end do
+      end do
+    end do
+    end if
+
+#endif
+    call Mii_step(uid2i)
+  end do update_particles
+end subroutine update_rock_state
+
+#ifndef SINGLEFLUID
+!> Update the colour of the particle in order to balance the
+!> inter-species forces
+subroutine update_rock_state_middle(N)
+  type(lbe_site),intent(inout) &
+       &:: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer i,ii,j,x,y,z      ! loop indices
+  integer :: n_c
+  type(local_chunk_type) :: c(n_max_local_chunks)
+
+  ! loop through own and halo'ed particles
+  i = atompnt
+  particles: do ii = 1,nlocal+nother
+    ! this could be optimized by choosing the respective particle's
+    ! R_max in case of polydispersity instead of ubound_R
+    call local_chunks(P(i),ubound_R,0,n_c,c)
+
+    ! Update the up to 8 non-halo parts of the box that might have
+    ! intersections with the local chunk.
+    do j=1,n_c
+      do x=c(j)%minx(1),c(j)%maxx(1)
+        do y=c(j)%minx(2),c(j)%maxx(2)
+          do z=c(j)%minx(3),c(j)%maxx(3)
+            call update_edge_node(N,i,c(j)%xc(1),c(j)%xc(2),c(j)%xc(3)&
+                 &,x,y,z)
+          end do
+        end do
+      end do
+    end do
+
+    if (ii.le.nlocal) then
+      i = list(i)
+    else
+      i = i + 1
+    endif
+  enddo particles
+end subroutine update_rock_state_middle
+#endif
+
+!> Sets (in|out)side-of-particle status of node (\c x \c y \c z) with
+!> regard to particle \c i (or its pbc image) at position (\c px \c py
+!> \c pz) .
+!>
+!> All positions are in local coordinates. Fluid is created or
+!> destroyed when a new lattice node is freed or occupied by the
+!> particle volume. The 2-pass version is not needed for SINGLEFLUID.
+subroutine update_node_1(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout) &
+       &:: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+  integer k,ruid
+  real(kind=rk) :: dist(nvecs) ! velocity distribution for new fluid
+  real(kind=rk) :: rs(3)       ! (/x,y,z/) relative to (/px,py,pz/)
+  real(kind=rk) :: vs(3)       ! particle surface velocity at (/x,y,z/)
+  real(kind=rk) :: fs(3)       ! force on particle surface at (/x,y,z/)
+  logical :: dissolve
+  real(kind=rk), parameter :: picheck=4.0_rk*DATAN(1.0_rk)
+
+#ifdef SINGLEFLUID
+  real(kind=rk) :: local_pfr
+#else
+  ! fluid densities at the surrounding sites
+  real(kind=rk) :: surroundings(n_spec)
+#endif
+
+  dissolve = to_be_deleted(P(i))
+  if (dissolve) then
+    ruid = uid_of_deletee(P(i))
+  else
+    ruid = P(i)%uid
+  end if
+
+!  write(*, "(4F16.10)") P(i)%o(1), P(i)%o(2), P(i)%o(3), datan(P(i)%o(2)/P(i)%o(3))*180.0_rk/pi
+!  write(*, "(2F20.18)") -dsin(pi/2.0_rk),dcos(pi/2.0_rk)
+!  call error_md("Angle of the orientation vector")
+
+  if (N(x,y,z)%rock_state==real(ruid,kind=rk)) then ! own rock
+    if (dissolve.or.&
+         &.not.in_particle(P(i),(/px,py,pz/),real((/x,y,z/),kind=rk))) then
+      ! position vector of particle surface node relative to
+      ! particle center of mass
+      rs(:) = real((/x,y,z/),kind=rk)-(/px,py,pz/)
+
+      ! surface velocity at  rs(:)
+      vs = P(i)%v_fluid_avg + cross_product(P(i)%ws_fluid_avg,rs)
+
+      call boltz_dist(vs(1),vs(2),vs(3),0.0_rk,0.0_rk,0.0_rk&
+           &,0.0_rk,0.0_rk,0.0_rk,dist)
+
+#ifdef INTERPOLATEDBB
+      ! calculate distance ratio between the last fluid node and wall boundary
+      ! Bouzidi linear Interpolation scheme
+      !
+      ! fluid nodes               wall  solid node
+      ! --o-------<-o->-----<-o->--|----x----
+      !            xB         x        xN
+
+      write(msgstr,"('call to delete particle!!! ')") 
+      call log_msg(msgstr)
+      call fractionaldist(N,P(i),(/px,py,pz/),x,y,z)
+#endif
+
+#ifdef SINGLEFLUID
+      ! create fluid - use equilibrium distribution and local density
+#ifdef LADD_SURR_RHOF
+      local_pfr = P(i)%rhof
+#else
+      local_pfr = pfr
+#endif
+      if (mass_correction) then
+        call create_mc_fluid_site(N,x,y,z,local_pfr,dist)
+      else
+        N(x,y,z)%n_r(:) = local_pfr*dist
+      end if
+#else
+! else BINARY
+      ! create fluid - use equilibrium distribution and fluid
+      ! proportions with initial density
+      call get_surroundings(N,x,y,z,surroundings)
+      ! mass correction for better mass conservation
+      if (mass_correction) then
+        call create_mc_fluid_site(N, x, y, z, surroundings, dist)
+      else
+        N(x,y,z)%n_r(:) = surroundings(1)*dist
+        N(x,y,z)%n_b(:) = surroundings(2)*dist
+#ifndef NOSURFACTANT
+        N(x,y,z)%n_s(:) = surroundings(3)*dist
+#endif
+      end if
+
+#endif
+! endif SINGLEFLUID
+
+!!!
+#ifndef REDUCED_EXCHANGE
+!!!
+      ! force and torque on particle in the opposite direction
+      ! of fluid velocity (Assume constant force during one
+      ! timestep and a timestep size of 1, so the force is the
+      ! same as the momentum)
+#ifdef SINGLEFLUID
+      fs(:) = -vs(:)*(amass_r*local_pfr)
+#else
+#ifdef NOSURFACTANT
+      fs(:) = -vs(:)*(amass_r*surroundings(1)+amass_b*surroundings(2))
+#else
+      fs(:) = -vs(:)*(amass_r*surroundings(1)+amass_b*surroundings(2)+amass_s*surroundings(3))
+#endif
+#endif
+
+      P(i)%f_fluid = P(i)%f_fluid + fs(:)
+      P(i)%t_fluid = P(i)%t_fluid + cross_product(rs(:),fs(:))
+
+#ifdef PARTICLESTRESS
+      ! call accumulate_stress(i,rs,fs)
+#endif
+!!!
+#endif
+!!!
+    end if
+  else if ( .not. is_fluid( N(x,y,z)%rock_state ) ) then
+    ! foreign or solid rock---note that nothing is done for ordinary,
+    ! not moving rock...
+    if (in_particle(P(i),(/px,py,pz/),real((/x,y,z/),kind=rk))) then
+      if ( is_colloid( N(x,y,z)%rock_state ) ) then
+        particle_overlap = particle_overlap + 1
+      else
+        rock_overlap = rock_overlap + 1
+      end if
+    end if
+  end if
+end subroutine update_node_1
+
+!> Sets (in|out)side-of-particle status of node (\c x \c y \c z) with
+!> regard to particle \c i (or its pbc image) at position (\c px \c py
+!> \c pz) .
+!>
+!> All positions are in local coordinates. Fluid is created or
+!> destroyed when a new lattice node is freed or occupied by the
+!> particle volume. The 2-pass version is not needed for SINGLEFLUID.
+subroutine update_node_2(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout) &
+       &:: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+  integer k,ruid
+  real(kind=rk) :: rs(3)       ! (/x,y,z/) relative to (/px,py,pz/)
+  real(kind=rk) :: fs(3)       ! force on particle surface at (/x,y,z/)
+  logical :: dissolve
+
+  dissolve = to_be_deleted(P(i))
+  if (dissolve) then
+     ruid = uid_of_deletee(P(i))
+  else
+     ruid = P(i)%uid
+  end if
+
+  ! note that nothing is done for ordinary, not moving rock...
+  if ( is_fluid( N(x,y,z)%rock_state ) ) then ! no rock (yet?)
+      if (.not.dissolve&
+           &.and.in_particle(P(i),(/px,py,pz/),real((/x,y,z/),kind=rk))) then
+        ! position vector of particle surface node relative to
+        ! particle center of mass
+        rs(:) = real((/x,y,z/),kind=rk)-(/px,py,pz/)
+
+        ! momentum of the fluid to erase is incorporated by the
+        ! particle (Assume constant force during one timestep
+        ! and a timestep size of 1, so the force is the same as
+        ! the momentum)
+        do k=1,3
+#ifdef SINGLEFLUID
+          fs(k) = sum(g(1:nnonrest)*c(1:nnonrest,k)*&
+              &(amass_r*N(x,y,z)%n_r(1:nnonrest)))
+#else
+#ifdef NOSURFACTANT
+          fs(k) = sum(g(1:nnonrest)*c(1:nnonrest,k)*&
+              &(amass_r*N(x,y,z)%n_r(1:nnonrest)&
+              &+amass_b*N(x,y,z)%n_b(1:nnonrest)))
+#else
+          fs(k) = sum(g(1:nnonrest)*c(1:nnonrest,k)*&
+              &(amass_r*N(x,y,z)%n_r(1:nnonrest)&
+              &+amass_b*N(x,y,z)%n_b(1:nnonrest)&
+              &+amass_s*N(x,y,z)%n_s(1:nnonrest)))
+#endif
+#endif
+        end do
+!!!
+#ifdef REDUCED_EXCHANGE
+        fs = fs - amass_r*pfr*(P(i)%v_fluid_avg+cross_product(P(i)%ws_fluid_avg,rs))
+#endif
+!!!
+
+        P(i)%f_fluid = P(i)%f_fluid + fs(:)
+        P(i)%t_fluid = P(i)%t_fluid + cross_product(rs(:),fs(:))
+
+#ifdef PARTICLESTRESS
+        ! call accumulate_stress(i,rs,fs)
+#endif
+
+        ! delete fluid
+        if (mass_correction) then
+          call delete_mc_fluid_site(N, x, y, z)
+        else
+          N(x,y,z)%n_r(:) = 0.0_rk
+#ifndef SINGLEFLUID
+          N(x,y,z)%n_b(:) = 0.0_rk
+#ifndef NOSURFACTANT
+          N(x,y,z)%n_s(:) = 0.0_rk
+#endif
+#endif
+        end if
+
+        ! create own rock
+        N(x,y,z)%rock_state = real(P(i)%uid,kind=rk)
+      end if
+  else if (N(x,y,z)%rock_state==real(ruid,kind=rk)) then ! own rock
+     if (dissolve.or.&
+          &.not.in_particle(P(i),(/px,py,pz/),real((/x,y,z/),kind=rk))) then
+        ! delete own rock
+        N(x,y,z)%rock_state = 0.0_rk
+     end if
+  end if
+end subroutine update_node_2
+
+#ifndef SINGLEFLUID
+!> Fills the restvec of the node (\c x \c y \c z) with colour if it is
+!> inside, but close to the edge of particle \c i
+subroutine update_edge_node(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout) :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+  integer :: k
+
+  real(kind=rk) :: surroundings(n_spec)
+  real(kind=rk) :: pc_current
+
+  ! Fill the restvec of the edges with the surrounding
+  ! colour in multicomponent case to balance forces
+  if (N(x,y,z)%rock_state==real(P(i)%uid,kind=rk)) then
+    if (near_particle_edge(P(i),px,py,pz,x,y,z)) then
+      call get_surroundings(N,x,y,z,surroundings)
+      call get_particle_colour(pc_current)
+      if(Janus_para) then
+          call get_particle_colour_janus_para(pc_current,P(i),px,py,pz,x,y,z)
+      endif
+      if (pc_current==0.0_rk) then
+        N(x,y,z)%n_r(restvec) = surroundings(1)
+        N(x,y,z)%n_b(restvec) = surroundings(2)
+#ifndef NOSURFACTANT
+        N(x,y,z)%n_s(restvec) = surroundings(3)
+#endif
+      else if (pc_current>0.0_rk) then
+        N(x,y,z)%n_r(restvec) = surroundings(1) + pc_current
+        N(x,y,z)%n_b(restvec) = surroundings(2)
+#ifndef NOSURFACTANT
+        N(x,y,z)%n_s(restvec) = surroundings(3)
+#endif
+      else
+        N(x,y,z)%n_r(restvec) = surroundings(1)
+        N(x,y,z)%n_b(restvec) = surroundings(2) - pc_current
+#ifndef NOSURFACTANT
+        N(x,y,z)%n_s(restvec) = surroundings(3)
+#endif
+      endif
+    endif
+  endif
+end subroutine update_edge_node
+#endif
+
+subroutine get_particle_colour(pc_current)
+  implicit none
+
+  real(kind=rk), intent(out) :: pc_current
+
+  if (n_particle_colour_change_start .lt. 0) then
+    ! No changing particle colour.
+    pc_current = particle_colour
+  else
+    if (nt .le. n_particle_colour_change_start) then
+      ! Original colour
+      pc_current = particle_colour
+    else if (nt .ge. n_particle_colour_change_start + n_particle_colour_change ) then
+      ! Target colour
+      pc_current = particle_colour_target
+    else
+      ! Linear change
+      pc_current = particle_colour + ( real(nt - n_particle_colour_change_start,kind=rk)/real(n_particle_colour_change,kind=rk) ) * ( particle_colour_target - particle_colour )
+    end if
+  end if
+end subroutine get_particle_colour
+
+subroutine get_particle_colour_janus_para(pc_current,p,px,py,pz,x,y,z)
+!get particle colour of a Janus particle at a special point at particle edge
+!for the parallel version
+  real(kind=rk), intent(out) :: pc_current
+  integer,intent(in) :: x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+  type(md_particle_type),intent(in) :: p
+  real(kind=rk) :: r(3),u,x_janus,pih,sqrt_janus,sqrt_janus_sq
+  real(kind=rk) :: m_sq
+
+  m_sq=(R_orth**2)/(R_para**2)
+  sqrt_janus_sq=tan(alpha)+m_sq
+  sqrt_janus=sqrt(sqrt_janus_sq)
+  pih=pi/2.0_rk
+  !if(n_janus.gt.1)if(alpha.le.pih)x_janus=R_orth/sqrt_janus
+  !if(n_janus.gt.1)if(alpha.eq.pih)x_janus=0
+  if(n_janus.gt.1) then
+      if(alpha.le.pih)x_janus=R_orth/sqrt_janus
+      if(alpha.eq.pih)x_janus=0
+  end if
+  if(n_janus.le.1)x_janus=n_janus*R_para
+  r = real((/x,y,z/),kind=rk)-(/px,py,pz/)
+  u = dot_product(p%o,r)
+  if(u.gt.x_janus)pc_current=particle_colour_top
+  if(u.lt.x_janus)pc_current=particle_colour_bottom
+  if(u.eq.x_janus)pc_current=(particle_colour_top+particle_colour_bottom)/2.0_rk
+end subroutine get_particle_colour_janus_para
+
+subroutine print_particle_colour()
+  implicit none
+
+  real(kind=rk) :: pc_current
+
+  if ( every_n_time_steps(n_sanity_check) ) then
+    call get_particle_colour(pc_current)
+    write(msgstr,"('Current particle colour: ',E16.8)") pc_current
+    call log_msg_md(msgstr)
+  end if
+
+end subroutine print_particle_colour
+
+!> For halo nodes it is sufficient to update rock_state.
+!>
+!> Momentum transfer and error checking is done on the cpu that owns
+!> the corresponding real node and fluid densities are not read from
+!> the halo until after the next halo exchange.
+pure subroutine update_halo_node(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout) :: &
+       &N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+  integer :: ruid
+  logical :: dissolve
+
+  dissolve = to_be_deleted(P(i))
+  if (dissolve) then
+     ruid = uid_of_deletee(P(i))
+  else
+     ruid = P(i)%uid
+  end if
+
+  if ( is_fluid( N(x,y,z)%rock_state ) ) then ! no rock (yet?)
+    if (.not.dissolve&
+         &.and.in_particle(P(i),(/px,py,pz/),real((/x,y,z/),kind=rk))) then
+      N(x,y,z)%rock_state = real(ruid,kind=rk) ! create new rock
+    end if
+  else if (N(x,y,z)%rock_state==real(ruid,kind=rk)) then ! own rock
+    if (dissolve.or.&
+         &.not.in_particle(P(i),(/px,py,pz/),real((/x,y,z/),kind=rk))) then
+      N(x,y,z)%rock_state = 0.0_rk ! clear old rock
+    end if
+  end if
+end subroutine update_halo_node
+
+
+
+#ifdef INTERPOLATEDBB
+!> returns the ratio of boundary distance from fluid node.
+!> delta_q ranges between 0 and 1.
+!> Required for Bouzidi BC. computed based on Iglberger et al (2008)
+!subroutine fractionaldist(N,p,px,x,y,z)
+!  type(lbe_site),intent(inout)&
+!       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+!  type(md_particle_type),intent(in) :: p
+!  real(kind=rk),intent(in) :: px(3)
+!  integer,intent(in) :: x,y,z
+!  integer :: xa,ya,za
+!  real(kind=rk) :: l(3),d(3),rop(2)
+!  real(kind=rk) :: lsq,msq,dist,dnorm,sub
+!  integer :: s
+!  ! Uncomment from here
+!  l = px-real((/x,y,z/),kind=rk)
+!  lsq = dot_product(l,l)
+!  rop = particle_radii(p)  ! (/R_orth,R_para/)
+!  ! upto here
+!
+!!  if(sqrt(lsq)>rop(1)) then
+!!  call log_msg("call inside fractionaldist !!!")
+!    do s=1,nnonrest
+!      xa = x + cx(s)
+!      ya = y + cy(s)
+!      za = z + cz(s)
+!      if (N(xa,ya,za)%rock_state .ne. 0) then
+!        if (N(x,y,z)%rock_state ==0) then
+!          d = real((/cx(s),cy(s),cz(s)/),kind=rk)
+!          dnorm  = sqrt(dot_product(d,d))
+!          d = d/dnorm
+!          dist = dot_product(l,d)
+!          msq = lsq-dist**2
+!          sub = sqrt(rop(1)**2-msq) ! rop(1) implies sphere without orientation
+!          N(x,y,z)%delta_q(s) = (dist-sub)/dnorm
+!!          N(x,y,z)%delta_q(s) = 0.5_rk
+!
+!! Circular channel flow
+!
+!!  l = px-real((/x,y,z/),kind=rk)
+!!  l = px-real((/xa,ya,za/),kind=rk)
+!!  l(3) = 0.0_rk
+!!  lsq = dot_product(l,l)
+!!  rop = particle_radii(p)  ! (/R_orth,R_para/)
+!!          d = real((/-cx(s),-cy(s),0/),kind=rk)
+!!          dnorm  = sqrt(dot_product(d,d))
+!!          d = d/dnorm
+!!          dist = dot_product(l,d)
+!!          msq = lsq-dist**2
+!!          sub = sqrt(rop(1)**2-msq) ! rop(1) implies sphere without orientation
+!!          N(x,y,z)%delta_q(s) = 1-((dist-sub)/dnorm)
+!!
+!!          
+!!          N(x,y,z)%delta_q(s) = 0.5_rk
+!!          write(msgstr&
+!!          write(*&
+!!               &,"('x = ',I0,', y = ',I0,', z = ',I0,', s=',I0,' dist = ',F16.10,',particle center = '3F16.10)")&
+!!               & x,y,z,s,N(x,y,z)%delta_q(s),px
+!!          call log_msg(msgstr)
+!          if(N(x,y,z)%delta_q(s)<0.or.N(x,y,z)%delta_q(s)>1.or.isnan(N(x,y,z)%delta_q(s))) then
+!            N(x,y,z)%delta_q(s) = 0 
+!            write(msgstr&
+!!             write(*&
+!                 &,"('dir = ',3F16.10,', lddist = ',F16.10,', msq = ',F16.10,', sub=',F16.10,' dist = 'F16.10)")&
+!                 & d,dist,msq,sub,N(x,y,z)%delta_q(s)
+!!            call log_msg(msgstr)
+!!            write(msgstr&
+!!                 &,"('x = ',I0,', y = ',I0,', z = ',I0,', s=',I0,' dist = ',F16.10,',particle center = '3F16.10)")&
+!!                 & x,y,z,s,N(x,y,z)%delta_q(s),px
+!!            call log_msg(msgstr)
+!!            write(msgstr&
+!!                 &,"('xa = ',I0,', ya = ',I0,', za = ',I0,' own_rockstate = ',F16.10,',xa_rockstate = 'F16.10)")&
+!!                 & xa,ya,za,N(x,y,z)%rock_state,N(xa,ya,za)%rock_state
+!!            call log_msg(msgstr)
+!          end if
+!        end if
+!      end if
+!    end do 
+!!  end if
+!end subroutine fractionaldist
+
+
+!subroutine fractionaldist(N,p,px,x,y,z)
+!  type(lbe_site),intent(inout)&
+!       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+!  type(md_particle_type),intent(in) :: p
+!  real(kind=rk),intent(in) :: px(3)
+!  integer,intent(in) :: x,y,z
+!  integer :: xa,ya,za
+!  real(kind=rk) :: l(3),m(3),rop(2)
+!  real(kind=rk) :: var1,var2,var3,v(3),dist(2)
+!  integer :: s
+!  logical :: intersects
+!
+!!  l = real((/x,y,z/),kind=rk)-px
+!  rop = particle_radii(p)  ! (/R_orth,R_para/)
+!  m = (/1/rop(1), 1/rop(1), 1/rop(2) /)
+!  l = (real((/x,y,z/),kind=rk)-px)*m(:)
+!  var3 = dot_product(l,l)-1.0_rk
+!  do s=1,nnonrest
+!    xa = x + cx(s)
+!    ya = y + cy(s)
+!    za = z + cz(s)
+!    !if (N(xa,ya,za)%rock_state .ne. 0) then
+!    if(N(xa,ya,za)%rock_state.eq.real(p%uid,kind=rk)) then
+!      if (N(x,y,z)%rock_state ==0) then
+!        v = real(c(s,:),kind=rk)*m(:)
+!        var1 = dot_product(v,v)
+!        var2 = 2*dot_product(l,v)
+!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.1) then
+!          write(*, "(3F16.10)")var1,var2,var3
+!        endif
+!        dist=quadratic_solver(var1,var2,var3,intersects)
+!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.1) then
+!          write(*, "(2F16.10)")dist
+!        endif
+!        if(dist(1).ge.0.0_rk.and.dist(2).ge.0.0_rk) then
+!          if(dist(1).lt.dist(2)) then
+!            N(x,y,z)%delta_q(s) = dist(1)
+!          else
+!            N(x,y,z)%delta_q(s) = dist(2)
+!          end if
+!        else if(dist(1).ge.0.0_rk) then
+!          N(x,y,z)%delta_q(s) = dist(1)
+!        else if(dist(2).ge.0.0_rk) then
+!          N(x,y,z)%delta_q(s) = dist(2)
+!        endif
+!
+!          if(N(x,y,z)%delta_q(s)<0.or.N(x,y,z)%delta_q(s)>1.or.isnan(N(x,y,z)%delta_q(s))) then
+!            write(msgstr&
+!!            write(*&
+!                 &,"('dir = ',3F16.10,', dist1 = ',F16.10,', dist2 = ',F16.10,' dist = 'F16.10)")&
+!                 & real(c(s,:),kind=rk),dist(1),dist(2),N(x,y,z)%delta_q(s)
+!            N(x,y,z)%delta_q(s) = 0.0_rk 
+!          end if
+!      end if
+!    end if
+!  end do
+!end subroutine fractionaldist
+
+
+! Compute fractionaldist for randomly oriented ellipsoid
+subroutine fractionaldist(N,p,px,x,y,z)
+  type(lbe_site),intent(inout)&
+       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  type(md_particle_type),intent(in) :: p
+  real(kind=rk),intent(in) :: px(3)
+  integer,intent(in) :: x,y,z
+  integer :: xa,ya,za
+  real(kind=rk) :: rop(2),ov(3)
+  real(kind=rk) :: var1,var2,var3,dist(2)
+  real(kind=rk) :: k1,k2,k3,p1(3),p2,v1(3),v2
+  integer :: s
+  logical :: intersects
+  real(kind=rk) :: m(3),surf(3),temp1,temp2(3),angle
+  !logical :: fexist
+  !character(len=1024) cfg_file_name
+  !integer      :: cfg_file_unit=23
+  !cfg_file_name = 'surfcheck.asc'
+ 
+  !  inquire(file=cfg_file_name,exist=fexist)
+  !  if (fexist) then
+  !     open(unit=cfg_file_unit,file=cfg_file_name,status='OLD'&
+  !          &,position='APPEND',recl=650)
+  !  else
+  !     open(unit=cfg_file_unit,file=cfg_file_name,status='NEW'&
+  !          &,position='APPEND',recl=650)
+  !  endif
+!  l = real((/x,y,z/),kind=rk)-px
+  rop = particle_radii(p)  ! (/R_orth,R_para/)
+!  m = (/1/rop(1), 1/rop(1), 1/rop(2) /)
+  p1 = (real((/x,y,z/),kind=rk)-px)
+  k1 = rop(2)**2
+  k2 = rop(1)**2-rop(2)**2
+  k3 = rop(1)**2*rop(2)**2
+  do s=1,nnonrest
+    xa = x + cx(s)
+    ya = y + cy(s)
+    za = z + cz(s)
+    !if(N(xa,ya,za)%rock_state .ne. 0) then
+    if(N(xa,ya,za)%rock_state.eq.real(p%uid,kind=rk)) then
+      if(N(x,y,z)%rock_state ==0) then
+        v1 = c(s,:)
+        ov = unit_vector(p%o)
+        p2 = dot_product(p1,ov)
+        v2 = dot_product(v1,ov)
+        var1 = k1*dot_product(v1,v1)+k2*v2**2
+        var2 = 2*(k1*dot_product(p1,v1)+k2*p2*v2)
+        var3 = k1*dot_product(p1,p1)+k2*p2**2-k3
+!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.1) then
+!          write(*, "(3F16.10)")k1,k2,k3
+!          write(*, "(3F16.10)")var1,var2,var3
+!        endif
+        dist=quadratic_solver(var1,var2,var3,intersects)
+!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.7) then
+!          write(*, "(2F16.10)")dist
+!        endif
+        if(dist(1).ge.0.0_rk.and.dist(2).ge.0.0_rk) then
+          if(dist(1).lt.dist(2)) then
+            N(x,y,z)%delta_q(s) = dist(1)
+          else
+            N(x,y,z)%delta_q(s) = dist(2)
+          end if
+        else if(dist(1).ge.0.0_rk) then
+          N(x,y,z)%delta_q(s) = dist(1)
+        else if(dist(2).ge.0.0_rk) then
+          N(x,y,z)%delta_q(s) = dist(2)
+        endif
+
+        surf=real((/x,y,z/),kind=rk)+N(x,y,z)%delta_q(s)*c(s,:)
+        surf=surf-px
+!        angle=datan(ov(2)/ov(3))
+!        write(*, "(F16.10)") angle
+!        call error_md("Angle of the orientation vector")
+!        surf = (/surf(1), surf(2)*dcos(angle)-surf(3)*dsin(angle),&
+!        &surf(2)*dsin(angle)+surf(3)*dcos(angle)/)
+!
+!        ro2 = rop(1)**2
+!        ro2_rp2 = ro2 / rop(2)**2
+!
+!        r = x-px
+!        u = dot_product(p%o,r)
+!        rho = r-u*p%o
+!        in_particle = u**2*ro2_rp2 + dot_product(rho,rho) < ro2
+
+        temp1 = dot_product(p%o,surf)
+        temp2 = surf-temp1*p%o
+        temp1 = (temp1**2*(rop(1)**2/rop(2)**2)+dot_product(temp2,temp2))/rop(1)**2
+       
+     !   write(unit=cfg_file_unit&
+     !        &,fmt='(4I10, 2F16.10)')&
+     !        & x,y,z,s,N(x,y,z)%delta_q(s),temp1
+
+
+        if(N(x,y,z)%delta_q(s)<0.or.N(x,y,z)%delta_q(s)>1.or.isnan(N(x,y,z)%delta_q(s)).or.temp1.gt.(1.0_rk+1e-5).or.temp1.lt.(1.0_rk-1e-5)) then
+!          write(msgstr&
+          write(*&
+               &,"('xyz = ',3I5,', dir = ',I5 ,', dist1 = ',F16.10,', dist2 = ',F16.10,' dist = ',F16.10,' ratio = ',F16.10)")&
+               & x,y,z,s,dist(1),dist(2),N(x,y,z)%delta_q(s),temp1
+          N(x,y,z)%delta_q(s) = 0.5_rk 
+        end if
+      end if
+    end if
+  end do
+!  close(cfg_file_unit)
+end subroutine fractionaldist
+
+!!! Compute fractionaldist for randomly oriented spherocylinder 
+!subroutine fractionaldist(N,p,px,x,y,z)
+!  type(lbe_site),intent(inout)&
+!       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+!  type(md_particle_type),intent(in) :: p
+!  real(kind=rk),intent(in) :: px(3)
+!  integer,intent(in) :: x,y,z
+!  integer :: xa,ya,za
+!  real(kind=rk) :: rop(2),ov(3)
+!  real(kind=rk) :: var1,var2,var3,dist(2),test(2),stack(6)
+!  real(kind=rk) :: rdiff,p1(3),p2,vec(3),vec1,vec2,cen(3),cen1
+!  integer :: s,i,j,counter
+!  logical :: intersects
+!  real(kind=rk) :: m(3),surf(3),temp1,temp2,angle
+!  logical :: fexist
+!  character(len=1024) cfg_file_name
+!  integer      :: cfg_file_unit=23
+!!  cfg_file_name = 'surfcheck.asc'
+!! 
+!!    inquire(file=cfg_file_name,exist=fexist)
+!!    if (fexist) then
+!!       open(unit=cfg_file_unit,file=cfg_file_name,status='OLD'&
+!!            &,position='APPEND',recl=650)
+!!    else
+!!       open(unit=cfg_file_unit,file=cfg_file_name,status='NEW'&
+!!            &,position='APPEND',recl=650)
+!!    endif
+!
+!
+!  rop = particle_radii(p)  ! (/R_orth,R_para/)
+!  rdiff = rop(2)-rop(1)
+!  if(rdiff<0.0_rk) then
+!    call error_md("Spherocylinder: R_para must be greater than R_orth")
+!  end if
+!!  p1 = (real((/x,y,z/),kind=rk)-px)
+!  do s=1,nnonrest
+!    xa = x + cx(s)
+!    ya = y + cy(s)
+!    za = z + cz(s)
+!    if(N(xa,ya,za)%rock_state.eq.real(p%uid,kind=rk)) then
+!      if(N(x,y,z)%rock_state ==0) then
+!!        write(*, "('Particle uid: 'I3' N(xa,ya,za)%rock_state :'F16.5)") p%uid, N(xa,ya,za)%rock_state
+!        stack(:) = 0.0_rk
+!        counter=0
+!        vec = real(c(s,:),kind=rk)
+!        ov = unit_vector(p%o)
+!!        ov = (/0.0_rk,-dsin(pi/2.0_rk),dcos(pi/2.0_rk)/)
+!!        ov = (/0.0_rk,-1.0_rk,0.0_rk/)
+!!        ov = unit_vector(ov)
+!!        ov = (/0.0_rk,-dsin(pi/4.0_rk),dcos(pi/4.0_rk)/)
+!!        p2 = dot_product(p1,ov)
+!        !! Checking ray-intersecting with cylinder region
+!        vec1 = dot_product(vec,ov)
+!        cen = px-real((/x,y,z/),kind=rk)
+!        cen1 = dot_product(cen,ov)
+!        var1 = dot_product(vec,vec)-vec1**2
+!        var2 = 2.0_rk*vec1*cen1-2*dot_product(vec,cen)
+!        var3 = dot_product(cen,cen)-cen1**2-rop(1)**2
+!!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.1) then
+!!!          write(*, "(3F16.10)")k1,k2,k3
+!!          write(*, "(3F16.10)")var1,var2,var3
+!!        endif
+!        dist=quadratic_solver(var1,var2,var3,intersects)
+!!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.1) then
+!!          write(*, "(2F16.10)")dist
+!!        endif
+!
+!        if(intersects) then
+!!          write(*, "('cylinder intersects')")
+!!          write(*&
+!!               &,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = '2F16.10)")&
+!!               &x,y,z,s,c(s,:),dist(1),dist(2)
+!          do j=1,2
+!            if(dist(j).ge.0.0_rk) then
+!              test(j)=dist(j)*vec1-cen1
+!              if(test(j).ge.-rdiff .and. test(j).le.rdiff) then
+!!                if(x.eq.24.and.y.eq.28.and.z.eq.38.and.s.eq.7) then
+!!                  write(*, "('cylinder intersects')")
+!!                  write(*, "(I5,3F16.10)")j,test(j),dist
+!!                  write(*, "(6F16.10)")vec1,cen1
+!!                endif
+!                counter = counter+1
+!                stack(counter) = dist(j)
+!              end if
+!            end if
+!          end do
+!        end if
+!        
+!        !! Checking ray-intersecting with top sphere
+!        cen = px-real((/x,y,z/),kind=rk)+rdiff*ov(:)
+!        cen1 = dot_product(cen,ov)
+!        var1 = dot_product(vec,vec) 
+!        var2 = -2.0_rk*dot_product(vec,cen)
+!        var3 = dot_product(cen,cen)-rop(1)**2
+!!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.7) then
+!!!          write(*, "(3F16.10)")k1,k2,k3
+!!          write(*, "(3F16.10)")var1,var2,var3
+!!        endif
+!        dist=quadratic_solver(var1,var2,var3,intersects)
+!!        if(x.eq.4.and.y.eq.6.and.z.eq.6.and.s.eq.7) then
+!!          write(*, "(2F16.10)")dist
+!!        endif
+!        if(intersects) then
+!!          write(*, "('Top hemisphere intersects')")
+!!          write(*&
+!!               &,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = '2F16.10)")&
+!!               &x,y,z,s,c(s,:),dist(1),dist(2)
+!          do j=1,2
+!            if(dist(j).ge.0.0_rk) then
+!              test(j)=dist(j)*vec1-cen1
+!              !! consider only the top-half of the top sphere
+!              if(test(j).le.rop(1) .and. test(j).gt.0.0_rk) then
+!!                if(x.eq.24.and.y.eq.28.and.z.eq.38.and.s.eq.7) then
+!!                  write(*, "('Top hemisphere intersects')")
+!!                  write(*, "(I5,3F16.10)")j,test(j),dist
+!!                  write(*, "(6F16.10)")vec1,cen1
+!!                endif
+!                counter = counter+1
+!                stack(counter) = dist(j)
+!              end if
+!            end if
+!          end do
+!        end if
+!
+!        !! Checking ray-intersecting with bottom sphere
+!        cen = px-real((/x,y,z/),kind=rk)-rdiff*ov(:)
+!        cen1 = dot_product(cen,ov)
+!        var1 = dot_product(vec,vec) 
+!        var2 = -2.0_rk*dot_product(vec,cen)
+!        var3 = dot_product(cen,cen)-rop(1)**2
+!        dist=quadratic_solver(var1,var2,var3,intersects)
+!        if(intersects) then
+!          do j=1,2
+!            if(dist(j).ge.0.0_rk) then
+!              test(j)=dist(j)*vec1-cen1
+!              if(test(j).ge.-rop(1) .and. test(j).lt.0.0_rk) then
+!!                if(x.eq.24.and.y.eq.28.and.z.eq.38.and.s.eq.7) then
+!!                  write(*, "('Bottom hemisphere intersects')")
+!!                  write(*, "(I5,3F16.10)")j,test(j),dist
+!!                  write(*, "(6F16.10)")vec1,cen1
+!!                endif
+!                counter = counter+1
+!                stack(counter) = dist(j)
+!              end if
+!            end if
+!          end do
+!        end if
+!
+!!        if(counter>2) then
+!!          write(*&
+!!               &,"('counter  = 'I10)")&
+!!               & counter
+!!            write(*&
+!!                 &,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = '6F16.10)")&
+!!                 &x,y,z,s,c(s,:),stack(1),stack(2),stack(3),stack(4),stack(5), stack(6)
+!!          call error_md("More than two intersections!!")
+!!        end if
+!
+!        var1 = stack(1)
+!        do j=2,counter
+!          if(stack(j)<var1)   var1 = stack(j)
+!        end do
+!        N(x,y,z)%delta_q(s) = var1
+!
+!!        if(stack(1).ge.0.0_rk.and.stack(2).ge.0.0_rk) then
+!!          if(stack(1).lt.stack(2)) then
+!!            N(x,y,z)%delta_q(s) = stack(1)
+!!          else
+!!            N(x,y,z)%delta_q(s) = stack(2)
+!!          end if
+!!        else if(stack(1).ge.0.0_rk) then
+!!          N(x,y,z)%delta_q(s) = stack(1)
+!!        else if(stack(2).ge.0.0_rk) then
+!!          N(x,y,z)%delta_q(s) = stack(2)
+!!        endif
+!!         write(*&
+!!              &,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = 'F16.10)")&
+!!              &x,y,z,s,c(s,:),N(x,y,z)%delta_q(s) !stack(1),stack(2),stack(3),stack(4),stack(5), stack(6)
+!
+!!        surf=real((/x,y,z/),kind=rk)+N(x,y,z)%delta_q(s)*c(s,:)
+!!        surf=surf-px
+!!
+!!        angle=datan(ov(2)/ov(3))
+!!
+!!        surf = (/surf(1), surf(2)*cos(angle)-surf(3)*sin(angle),&
+!!        &surf(2)*sin(angle)+surf(3)*cos(angle)/)
+!!       
+!!        temp1=(surf(1)**2+surf(2)**2 &
+!!             &+(1.0_rk/4.0_rk)*(abs(surf(3)-rdiff)+abs(surf(3)+rdiff)-2*rdiff)**2)/rop(1)**2
+!!
+!!        if(temp1.lt.(1.0_rk-1e-10).or.temp1.gt.(1.0_rk+1e-10)) then
+!!            write(*&
+!!                 !&,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = '6F16.10)")&
+!!                 &,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = 'F16.10)")&
+!!                 &x,y,z,s,c(s,:),N(x,y,z)%delta_q(s) !stack(1),stack(2),stack(3),stack(4),stack(5), stack(6)
+!!        end if
+!!
+!!        write(unit=cfg_file_unit&
+!!             &,fmt='(4I10, 6F16.10)')&
+!!             & x,y,z,s,N(x,y,z)%delta_q(s),surf(1),surf(2),surf(3),&
+!!             &(1.0_rk/4.0_rk)*(abs(surf(3)-rdiff)+abs(surf(3)+rdiff)-2*rdiff)**2,&
+!!             & temp1
+!!!             &+surf(3)**2)/rop(1)**2
+!
+!
+!          if(N(x,y,z)%delta_q(s)<0.or.N(x,y,z)%delta_q(s)>1.or.isnan(N(x,y,z)%delta_q(s))) then
+!!            write(msgstr&
+!            write(*&
+!                 !&,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = '6F16.10)")&
+!                 &,"('pos = ',3I5,' , s = ',I5,', dir = ',3I5,', dist = 'F16.10)")&
+!                 &x,y,z,s,c(s,:),N(x,y,z)%delta_q(s) !stack(1),stack(2),stack(3),stack(4),stack(5), stack(6)
+!            N(x,y,z)%delta_q(s) = 0.5_rk 
+!          end if
+!
+!          !write(*&
+!          !     &,"(3F16.10)")&
+!          !     real((/x,y,z/),kind=rk)+N(x,y,z)%delta_q(s)*vec
+!      end if
+!    end if
+!  end do
+!!  close(cfg_file_unit)
+!end subroutine fractionaldist
+#endif
+
+
+
+!> returns whether \c x is inside the ellipsoidal particle \c p at position \c px
+!>
+!> it is important that the function returns \c .false.  if \c
+!> (/x,y,z/) is exactly at the edge of the particle, because the
+!> finding of the boundary box relies on this.
+pure logical function in_particle(p,px,x)
+  type(md_particle_type),intent(in) :: p
+  real(kind=rk),intent(in) :: px(3),x(3)
+  real(kind=rk) :: r(3),rho(3),rop(2),ro2,ro2_rp2,u
+
+  rop = particle_radii(p)  ! (/R_orth,R_para/)
+  ro2 = rop(1)**2
+  ro2_rp2 = ro2 / rop(2)**2
+
+  r = x-px
+  u = dot_product(p%o,r)
+  rho = r-u*p%o
+  in_particle = u**2*ro2_rp2 + dot_product(rho,rho) < ro2
+!
+! Circular channel (use periodic channel with gravity driven in simulation)
+!in_particle = (x(1)-px(1))**2+(x(2)-px(2))**2>ro2
+ 
+! Cube without orientation
+!  r = x-px
+!  rop = particle_radii(p)  ! (/R_orth,R_para/)
+!  in_particle=(r(1)<rop(1).and.r(1)>(-1*rop(1)).and.r(2)<rop(1).and.r(2)>(-1*rop(1)).and.r(3)<rop(1).and.r(3)>(-1*rop(1)))
+!
+end function in_particle
+
+
+!!> returns whether \c x is inside the spherocylindrical (capsule)
+!!> particle \c p at position \c px
+!!>
+!!> it is important that the function returns \c .false.  if \c
+!!> (/x,y,z/) is exactly at the edge of the particle, because the
+!!> finding of the boundary box relies on this.
+!pure logical function in_particle(p,px,x)
+!  type(md_particle_type),intent(in) :: p
+!  real(kind=rk),intent(in) :: px(3),x(3)
+!  real(kind=rk) :: r(3),rho(3),rop(2),ro2,rdiff,u
+!!  real(kind=rk) :: vector(3)
+!  rop = particle_radii(p)  ! (/R_orth,R_para/)
+!  ro2 = rop(1)**2
+!  rdiff = rop(2) - rop(1)
+!
+!  r = x-px
+!!  u = dot_product(p%o,r)
+!!  rho = r-u*p%o
+!  u = dot_product(unit_vector(p%o),r)
+!  rho = r-u*unit_vector(p%o)
+!!  u = dot_product((/0.0_rk,-dsin(pi/2.0_rk),dcos(pi/2.0_rk)/),r)
+!!  rho = r-u*(/0.0_rk,-dsin(pi/2.0_rk),dcos(pi/2.0_rk)/)
+!!  vector = (/0.0_rk,-dsin(pi/2.0_rk),dcos(pi/2.0_rk)/)
+!!  u = dot_product(vector,r)
+!!  rho = r-u*vector !(/0.0_rk,-dsin(pi/2.0_rk),dcos(pi/2.0_rk)/)
+!!  u = dot_product((/0.0_rk,-1.0_rk,0.0_rk/),r)
+!!  rho = r-u*(/0.0_rk,-1.0_rk,0.0_rk/)
+!!  u = dot_product(unit_vector(0.0_rk,-1.0_rk,0.0_rk),r)
+!!  rho = r-u*unit_vector(0.0_rk,-1.0_rk,0.0_rk)
+!
+!  if((u.le.rdiff).and.(u.ge.-rdiff)) then
+!    in_particle = dot_product(rho,rho) < ro2
+!  elseif(u.lt.rop(2).and.u.gt.-rop(2)) then
+!    in_particle = (abs(u)-rdiff)**2+dot_product(rho,rho) < ro2
+!  else
+!    in_particle = .false.
+!  end if
+!end function in_particle
+
+
+
+#ifndef SINGLEFLUID
+!> Returns whether \c (/x,y,z/) is inside, but near the edge of the
+!> particle at position \c (/px,py,pz/) with the orientation \c o.
+pure logical function near_particle_edge(p,px,py,pz,x,y,z)
+  type(md_particle_type),intent(in) :: p
+  real(kind=rk),intent(in) :: px,py,pz
+  integer,intent(in) :: x,y,z
+  real(kind=rk) :: r(3),rho(3),u, rorp(2),rosq, rosqbyrpsq, ro2sq,rp2sq
+
+  r = real((/x,y,z/),kind=rk)-(/px,py,pz/)
+  u = dot_product(p%o,r)
+  rho(:) = r(:)-u*p%o(:)
+  !near_particle_edge = ( (u**2*RosqbyRpsq+dot_product(rho,rho)>Ro2sq)&
+                      !&.and.(u**2*RosqbyRpsq+dot_product(rho,rho)<Rosq) )
+  !near_particle_edge = (u**2*RosqbyRpsq+dot_product(rho,rho)<Rosq)
+  !near_particle_edge = ( (u**2*Ro2sqbyRp2sq+dot_product(rho,rho)>Ro2sq)&
+                      !&.and.(u**2*RosqbyRpsq+dot_product(rho,rho)<Rosq) )
+ 
+!> if (polydispersity) then
+    rorp = particle_radii(p) ! (/R_orth,R_para/)
+    rosq = rorp(1)**2
+    rosqbyrpsq = rosq/rorp(2)**2
+  
+    if (rorp(1) > 2.0_rk ) then
+      ro2sq = (rorp(1) - 2.0_rk )**2
+    else
+      ro2sq = 0.0_rk
+    end if
+  
+    if (rorp(2) > 2.0_rk ) then
+      rp2sq = (rorp(2) - 2.0_rk )**2
+    else
+      rp2sq = 0.0_rk
+    end if
+!> end if  
+
+  near_particle_edge = ( ( u**2 * ro2sq + dot_product(rho,rho) *rp2sq .ge. ro2sq * rp2sq) &
+                 & .and. ( u**2 * rosqbyrpsq + dot_product(rho,rho) < rosq) )
+end function near_particle_edge
+#endif
+
+#ifdef INTERPOLATEDBB
+subroutine curved_wall_prebounce(N)
+  type(lbe_site),intent(inout) :: &
+       &N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer i,ii,j,x,y,z      ! loop indices
+  integer :: n_c
+  type(local_chunk_type) :: c(n_max_local_chunks)
+!  integer :: counter
+  call Mii_rewind(uid2i)
+
+!  counter=0.d0
+  ! loop through own and halo'ed particles---iterating in order with
+  ! ascending uids is only required for PERIODIC_INFLOW but thanks to
+  ! map_module should not do much harm to performance.
+  prebounce_particles: do ii = 1,Mii_count(uid2i)
+     i = Mii_cur_value(uid2i)
+
+     ! write(*,"('calling curved wall prebounce!!! ')") 
+
+     ! this could be optimized by choosing the respective particle's
+     ! R_max in case of polydispersity instead of ubound_R
+     call local_chunks(P(i),ubound_R,0,n_c,c)
+     do j=1,n_c
+        do x=c(j)%minx(1),c(j)%maxx(1)
+           do y=c(j)%minx(2),c(j)%maxx(2)
+              do z=c(j)%minx(3),c(j)%maxx(3)
+                 call curved_prebounce_node(N,i,c(j)%xc(1),c(j)%xc(2),c(j)%xc(3),x,y,z)
+              end do
+           end do
+        end do
+     end do
+!     write(*,"(I0,'  normal_force  = ',3F16.10,' in %: ',F16.10)") &
+!     &     i,P(i)%f_normal,P(i)%f_normal(3)/P(i)%f_fluid(3)
+!     write(*,"(I0,' tangent_force  = ',3F16.10,' in %: ',F16.10)") &
+!     &     i,P(i)%f_tangent, P(i)%f_tangent(3)/P(i)%f_fluid(3)
+!     write(*,"(I0,' total_force  = ',3F16.10)") i,P(i)%f_fluid
+
+  !   write(*,"('Counter value = ',I0)") counter
+     call Mii_step(uid2i)
+  enddo prebounce_particles
+
+end subroutine curved_wall_prebounce
+
+
+subroutine curved_prebounce_node(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout) ::&
+       & N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+!  integer,intent(inout) :: counter
+  real(kind=rk),intent(in) :: px,py,pz
+  integer j,s
+  integer tx,ty,tz ! target node to node  (/x,y,z/)  and direction  s
+  real(kind=rk) :: rbb(3) ! boundary node
+  real(kind=rk) :: rb(3) ! boundary node relative to (/px,py,pz/)
+  real(kind=rk) :: vb(3) ! boundary node velocity
+  real(kind=rk) :: fb(3) ! force on particle at boundary node
+  real(kind=rk) :: vo(3) ! boundary node velocity of other particle
+  real(kind=rk) :: corr,n_eq_s
+  integer maxb(3),minb(3)       ! bounding box boundaries without pbc
+  integer :: ts(3),ls(3)        ! total and local sizes
+  real(kind=rk) :: arhof
+  real(kind=rk) :: corr_r
+  real(kind=rk) :: rop(2), temp
+#ifdef FORCECOMPONENT  
+  real(kind=rk) :: fb_norm(3) ! normal force on particle at boundary node
+  real(kind=rk) :: fb_tang(3) ! tangential force on particle at boundary node
+  real(kind=rk) :: Rop2, ov(3), norm_vec(3)
+  fb_norm = 0.0_rk
+  fb_tang = 0.0_rk
+  Rop2 = R_orth**2-R_para**2
+  ov(:) = P(i)%o(:)
+  gradient_matrix = reshape(2.0_rk*&
+  &(/R_orth**2*ov(1)**2+R_para**2*(ov(2)**2+ov(3)**2),  Rop2*ov(1)*ov(2),  Rop2*ov(1)*ov(3),&
+  & Rop2*ov(1)*ov(2),   R_orth**2*ov(2)**2+R_para**2*(ov(1)**2+ov(3)**2),  Rop2*ov(2)*ov(3),&
+  & Rop2*ov(1)*ov(3),   Rop2*ov(2)*ov(3),  R_orth**2*ov(3)**2+R_para**2*(ov(1)**2+ov(2)**2)&
+  &/),&
+  &(/3,3/))
+#endif        
+!          write(*,"('Inside curved_prebounce_node!!! ')") 
+!    ! Total force test on single particle (all solid-fluid links basically):
+!    ! works only for serial version
+!!    do z=1,nx
+!!      do y=1,ny
+!!        do x=1,nz
+!          if(N(x,y,z)%rock_state.eq.0) then
+!            do s=1,nnonrest
+!              tx = x + cx(s)
+!              ty = y + cy(s)
+!              tz = z + cz(s)
+!              if(N(tx,ty,tz)%rock_state.ne.0) then
+!                fb = c(s,:)*(N(x,y,z)%n_r(bounce(s))+N(tx,ty,tz)%n_r(s))
+!                P(i)%f_fluid = P(i)%f_fluid + fb(:)
+!                counter=counter+1
+!              endif
+!            end do
+!          end if
+!!        end do
+!!      end do
+!!    end do
+
+  ! do nothing for vectors that start from rock nodes owned by particle  i
+!  rop = particle_radii(p)  ! (/R_orth,R_para/)
+  rs_from: if (N(x,y,z)%rock_state/=real(P(i)%uid,kind=rk)) then
+
+    do s=1,nnonrest
+      ! find links that cross the surface of particle  i
+      tx = x+cx(s)
+      ty = y+cy(s)
+      tz = z+cz(s)
+      rs_to: if (N(tx,ty,tz)%rock_state==real(P(i)%uid,kind=rk)) then
+
+        ! position of bounce-back
+        rbb = N(x,y,z)%delta_q(s)*real(c(s,:),kind=rk)+real((/x,y,z/),kind=rk)
+
+        ! position of bounce-back relative to particle
+        rb = rbb-(/px,py,pz/)
+
+
+!        ! surface velocity at  rb(:)
+!        vb = P(i)%v_fluid_avg + cross_product(P(i)%ws_fluid_avg,rb)
+!
+!        if(N(x,y,z)%delta_q(s)<0.5) then
+!          corr = 6.0_rk*w(s)*dot_product(vb(:),c(s,:))
+!        else
+!          corr = 3.0_rk*w(s)/N(x,y,z)%delta_q(s)*dot_product(vb(:),c(s,:))
+!        endif
+!
+!        ! correction due to  vb(:)  if there was unit density at
+!        !  (x y z) . The coefficient 1/6 differs from the
+!        ! s-dependent coefficients in most papers. The reason is
+!        ! that lb3d has the  g(:)  vector. The deduction can be
+!        ! found in Florian's diploma thesis.
+!        corr = dot_product(vb(:),c(s,:))/6.0_rk
+!
+!
+!        ! assumed fluid mass density at the location of the
+!        ! particle. This is related to the local pressure and used to
+!        ! reduce discretization effects.
+!        arhof = pfr*amass_r
+!
+        rs_from_again: if ( is_fluid( N(x,y,z)%rock_state ) ) then
+!          write(*,"('Inside force evaluation!!! ')") 
+          fb(:) = c(s,:)*(N(x,y,z)%n_r(bounce(s))+N(tx,ty,tz)%n_r(s))*g(s)
+
+#ifdef FORCECOMPONENT        
+
+!        write(*,"('gradient_matrix : ',9F16.10)") gradient_matrix
+        norm_vec = unit_vector(matmul(gradient_matrix,rb))
+!        if(norm(rb).eq.10.and.abs(rb(1)).eq.10) then
+!
+!          write(*, "('ov : ' 3F10.5)") P(i)%o
+!          write(*, "('gradient_matrix : ' 9F5.5)") gradient_matrix
+!          write(*, "('rb : ' 3F10.5, 3F10.5)") rb, rbb
+!          write(*, "('Norm vec : ' 3F10.5)") norm_vec
+!        end if
+        fb_norm(:) = dot_product(fb(:),norm_vec(:))*norm_vec(:)
+        fb_tang(:) = fb(:)-fb_norm(:)
+        P(i)%f_normal  = P(i)%f_normal + fb_norm(:)
+        P(i)%f_tangent = P(i)%f_tangent + fb_tang(:)
+#endif         
+!          corr_r = rho_r(x,y,z)*corr
+!          N(x,y,z)%n_r(s) = N(x,y,z)%n_r(s) + corr_r
+!          write(*, "('Position of particle : ' F16.10)") dot_product(rb,rb)-7.5**2! rop(1)**2
+!          temp=dot_product(rb,rb)-7.5**2
+!          if(temp**2.gt.1e-10 .or.temp**2.lt.-1e-10) then
+!            write(msgstr&
+!                 &,"('x = ',I0,', y = ',I0,', z = ',I0,', s=',I0,' dist = ',F16.10,',particle center = '3F16.10)")&
+!                 & x,y,z,s,N(x,y,z)%delta_q(s),px
+!          endif
+
+!          ! apply correction to fluid population to be bounced
+!          ! back, but do this only if the boundary link starts
+!          ! from a node that does not belong to another ladd
+!          ! particle or to solid rock
+!
+!
+!          ! Real correction for each species.
+!          corr_r = rho_r(x,y,z)*corr
+!
+!          ! momentum transfer to particle  i  during bounce-back
+!          ! in the next advection step (Assume constant force
+!          ! during one timestep and a timestep size of 1, so
+!          ! the force is the same as the momentum). Use the actual
+!          ! fluid densities at position (x,y,z) if there is fluid.
+!          fb(:) = c(s,:)*g(s)*&
+!              &((2.0_rk*N(x,y,z)%n_r(s)-corr_r&
+!              &)*amass_r-2.0_rk*n_eq_u0(s)*arhof)
+!
+!
+!          ! save mass change for mass conservation
+!          if (mass_correction) then
+!            call correct_mc_fluid_site(N, x, y, z, s, (/ corr_r /))
+!          else
+!            N(x,y,z)%n_r(s) = N(x,y,z)%n_r(s) - corr_r
+!          end if
+
+
+!        else if ( is_wall( N(x,y,z)%rock_state ) ) then rs_from_again
+!          ! If there is solid rock assume equilibrium
+!          ! densities for velocity 0 at  (/x,y,z/) .
+!
+!          ! momentum transfer to particle i during bounce-back in the
+!          ! next advection step (Assume constant force during one
+!          ! timestep and a timestep size of 1, so the force is the
+!          ! same as the momentum).
+!          fb = -c(s,:)*g(s)*(corr&
+!               &)*arhof
+!       else rs_from_again      ! source rock_state > 0
+!
+!          ! If there is another particle assume equilibrium densities
+!          ! at position (/x,y,z/) for its local surface velocity
+!          ! vo. The surface velocity is evaluated at rb for symmetry
+!          ! reasons.
+!
+!          vo = local_particle_velocity(rbb,nint(N(x,y,z)%rock_state))
+!
+!          call boltz_dist_s(vo(1),vo(2),vo(3),0.0_rk,0.0_rk,0.0_rk,0.0_rk&
+!               &,0.0_rk,0.0_rk,n_eq_s,s)
+!
+!          ! momentum transfer to particle  i  during bounce-back in
+!          ! the next advection step (Assume constant force during one
+!          ! timestep and a timestep size of 1, so the force is the
+!          ! same as the momentum).
+!          fb = c(s,:)*g(s)*(2.0_rk*(n_eq_s-n_eq_u0(s))-corr&
+!               &)*arhof
+!
+        end if rs_from_again
+
+        ! apply force and torque
+        P(i)%f_fluid = P(i)%f_fluid + fb(:)
+        P(i)%t_fluid = P(i)%t_fluid + cross_product(rb(:),fb(:))
+      end if rs_to
+    end do
+!  else rs_from
+!    if (use_lbe_force) then
+!       call get_total_force(fb(1),fb(2),fb(3),x,y,z)
+!
+!       if (any(fb/=0.0_rk)) then
+!          ! position relative to particle
+!          rb = real((/x,y,z/),kind=rk)-(/px,py,pz/)
+!
+!          ! apply force and torque
+!          P(i)%f_fluid = P(i)%f_fluid + fb
+!          P(i)%t_fluid = P(i)%t_fluid + cross_product(rb,fb)
+!
+!       end if
+!    end if
+  end if rs_from
+end subroutine curved_prebounce_node
+#endif !interpolatedbb
+
+
+
+!> Apply 1st order correction to populations about to bounce back from
+!> a moving rock site
+!>
+!> \param N local lattice chunk including full halo
+!>
+!> Adapt densities of fluid, which will bounce back at particle rock
+!> sites in the following advection step, with respect to particle
+!> movement. Also account for the momentum transfer on the
+!> particles. The actual bounce-back is performed in the LB advection
+!> routine.
+subroutine moving_wall_prebounce(N)
+  type(lbe_site),intent(inout) :: &
+       &N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer i,ii,j,x,y,z      ! loop indices
+  integer :: n_c
+  type(local_chunk_type) :: c(n_max_local_chunks)
+!!$  logical flipped
+
+!      write(*,"('calling moving wall prebounce!!! ')") 
+!!$  flipped = .false.
+  call Mii_rewind(uid2i)
+
+!!$  if (Mii_count(uid2i)==0) return
+!!$
+!!$  ! are there master particles? if so convert slave to master rock
+!!$  ! state at the upper halo layer of the periodic sub-volume
+!!$  if (Mii_cur_key(uid2i)<first_inserted_puid) then
+!!$     call slave2master_rock_state_at_interface(N)
+!!$     flipped = .true.
+!!$  end if
+
+  ! loop through own and halo'ed particles---iterating in order with
+  ! ascending uids is only required for PERIODIC_INFLOW but thanks to
+  ! map_module should not do much harm to performance.
+  prebounce_particles: do ii = 1,Mii_count(uid2i)
+     i = Mii_cur_value(uid2i)
+
+!!$     ! first slave particle---revert slave rock state again
+!!$     if (flipped.and.Mii_cur_key(uid2i)>=first_inserted_puid) then
+!!$        call restore_slave_rock_state_at_interface(N)
+!!$        flipped = .false.
+!!$     end if
+
+     ! this could be optimized by choosing the respective particle's
+     ! R_max in case of polydispersity instead of ubound_R
+     call local_chunks(P(i),ubound_R,0,n_c,c)
+     do j=1,n_c
+        do x=c(j)%minx(1),c(j)%maxx(1)
+           do y=c(j)%minx(2),c(j)%maxx(2)
+              do z=c(j)%minx(3),c(j)%maxx(3)
+                 call prebounce_node(N,i,c(j)%xc(1),c(j)%xc(2),c(j)%xc(3),x,y,z)
+              end do
+           end do
+        end do
+     end do
+
+     call Mii_step(uid2i)
+  enddo prebounce_particles
+
+!!$  ! be sure to leave particle rock state the way it was before this
+!!$  ! subroutine
+!!$  if (flipped) call restore_slave_rock_state_at_interface(N)
+end subroutine moving_wall_prebounce
+
+!> Checks whether fluid densities at local position (\c x \c y \c z)
+!> are crossing the surface of the particle \c i (or its pbc image) at
+!> local position (\c px \c py \c pz).
+!>
+!> These densities are corrected according to the particle surface
+!> velocity as described in the papers by Ladd or Aidun.
+!>
+!> All partial forces along a link are reduced by the force that would
+!> be present if the particle was suspended in resting fluid at the
+!> locally assumed fluid density. Due to the lattice symmetry, this
+!> reduction sums up to zero for any closed surface. However, if the
+!> particle surface is not symmetrically closed (this currently
+!> happens if a Lees-Edwards plane cuts a particle), the subtraction
+!> removes artificial pressure forces.
+subroutine prebounce_node(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout) ::&
+       & N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+  integer j,s
+  integer tx,ty,tz ! target node to node  (/x,y,z/)  and direction  s
+  real(kind=rk) :: rbb(3) ! boundary node
+  real(kind=rk) :: rb(3) ! boundary node relative to (/px,py,pz/)
+  real(kind=rk) :: vb(3) ! boundary node velocity
+  real(kind=rk) :: fb(3) ! force on particle at boundary node
+  real(kind=rk) :: vo(3) ! boundary node velocity of other particle
+  real(kind=rk) :: corr,n_eq_s
+  integer maxb(3),minb(3)       ! bounding box boundaries without pbc
+  integer :: ts(3),ls(3)        ! total and local sizes
+  real(kind=rk) :: arhof
+  real(kind=rk) :: corr_r
+#ifndef SINGLEFLUID
+  real(kind=rk) :: corr_b
+#ifndef NOSURFACTANT
+  real(kind=rk) :: corr_s
+#endif
+#endif
+#ifdef PARTICLESTRESS
+  real(kind=rk) :: A(3,3),fb_b(3),fbd(3),fbd_b(3),rb_b(3)
+  real(kind=rk),parameter :: small=1.0e-12_rk
+#endif
+#ifdef LADD_DLUB
+  integer :: duid,dx,dy,dz
+#endif
+#ifdef LADD_SSD
+  real(kind=rk) :: RB_cross(3,3)
+#endif
+#ifdef LADD_GALILEAN
+  real(kind=rk) :: corr_gal
+#endif
+
+  ! do nothing for vectors that start from rock nodes owned by particle  i
+  rs_from: if (N(x,y,z)%rock_state/=real(P(i)%uid,kind=rk)) then
+
+    do s=1,nnonrest
+      ! find links that cross the surface of particle  i
+      tx = x+cx(s)
+      ty = y+cy(s)
+      tz = z+cz(s)
+      rs_to: if (N(tx,ty,tz)%rock_state==real(P(i)%uid,kind=rk)) then
+
+        ! position of bounce-back
+        rbb = 0.5_rk*real(c(s,:),kind=rk)+real((/x,y,z/),kind=rk)
+
+        ! position of bounce-back relative to particle
+        rb = rbb-(/px,py,pz/)
+
+        ! surface velocity at  rb(:)
+        vb = P(i)%v_fluid_avg + cross_product(P(i)%ws_fluid_avg,rb)
+
+        ! correction due to  vb(:)  if there was unit density at
+        !  (x y z) . The coefficient 1/6 differs from the
+        ! s-dependent coefficients in most papers. The reason is
+        ! that lb3d has the  g(:)  vector. The deduction can be
+        ! found in Florian's diploma thesis.
+        corr = dot_product(vb(:),c(s,:))/6.0_rk
+
+#ifdef LADD_GALILEAN
+        ! 2nd order terms in bdist break Galilean invariance, correct
+        ! for this error by removing their contribution to the force
+        ! on the particle (but don't touch the bounced-back fluid
+        ! population)
+        corr_gal = dot_product(vb,c(s,:))**2/4.0_rk-dot_product(vb,vb)/12.0_rk
+#ifdef NEGGAL
+        corr_gal = -corr_gal
+#endif
+#endif
+
+        ! assumed fluid mass density at the location of the
+        ! particle. This is related to the local pressure and used to
+        ! reduce discretization effects.
+        arhof = &
+#ifdef SINGLEFLUID
+#ifdef LADD_SURR_RHOF
+             &P(i)%rhof*amass_r
+#else
+             &pfr*amass_r
+#endif
+#else
+#ifdef NOSURFACTANT
+             &pfr*amass_r+pfb*amass_b
+#else
+             &pfr*amass_r+pfb*amass_b+pfg*amass_s
+#endif
+#endif
+
+        rs_from_again: if ( is_fluid( N(x,y,z)%rock_state ) ) then
+          ! apply correction to fluid population to be bounced
+          ! back, but do this only if the boundary link starts
+          ! from a node that does not belong to another ladd
+          ! particle or to solid rock
+
+#ifdef LADD_SURR_RHOF
+          ! accumulate surrounding density
+          P(i)%rhof_acc = P(i)%rhof_acc + rho_r(x,y,z)
+          P(i)%n_acc = P(i)%n_acc + 1
+#endif
+
+          ! Real correction for each species.
+          corr_r = rho_r(x,y,z)*corr
+#ifndef SINGLEFLUID
+          corr_b = rho_b(x,y,z)*corr
+#ifndef NOSURFACTANT
+          corr_s = rho_g(x,y,z)*corr
+#endif
+#endif
+
+          ! momentum transfer to particle  i  during bounce-back
+          ! in the next advection step (Assume constant force
+          ! during one timestep and a timestep size of 1, so
+          ! the force is the same as the momentum). Use the actual
+          ! fluid densities at position (x,y,z) if there is fluid.
+#ifdef SINGLEFLUID
+          fb(:) = c(s,:)*g(s)*&
+              &((2.0_rk*N(x,y,z)%n_r(s)-corr_r&
+#ifdef LADD_GALILEAN
+              &-rho_r(x,y,z)*corr_gal&
+#endif
+              &)*amass_r-2.0_rk*n_eq_u0(s)*arhof)
+#else
+#ifdef NOSURFACTANT
+          fb(:) = c(s,:)*g(s)*&
+              &((2.0_rk*N(x,y,z)%n_r(s)-corr_r)*amass_r&
+              &+(2.0_rk*N(x,y,z)%n_b(s)-corr_b)*amass_b-2.0_rk*n_eq_u0(s)*arhof)
+#else
+          fb(:) = c(s,:)*g(s)*&
+              &((2.0_rk*N(x,y,z)%n_r(s)-corr_r)*amass_r&
+              &+(2.0_rk*N(x,y,z)%n_b(s)-corr_b)*amass_b&
+              &+(2.0_rk*N(x,y,z)%n_s(s)-corr_s)*amass_s-2.0_rk*n_eq_u0(s)*arhof)
+#endif
+#endif
+
+#ifdef LADD_SSD
+          RB_cross = reshape((&
+               &/0.0_rk,rb(3),-rb(2)&
+               &,-rb(3),0.0_rk,rb(1)&
+               &,rb(2),-rb(1),0.0_rk/),(/3,3/))
+          P(i)%FvF = P(i)%FvF + (amass_r/6.0_rk)*g(s)*rho_r(x,y,z)&
+               &*matmul(reshape(c(s,:),(/3,1/)),reshape(c(s,:),(/1,3/)))
+          P(i)%FwF = P(i)%FwF + (amass_r/6.0_rk)*g(s)*rho_r(x,y,z)&
+               &*matmul(matmul(reshape(c(s,:),(/3,1/)),reshape(c(s,:),(/1,3/)))&
+               &,RB_cross)
+          P(i)%FvT = P(i)%FvT + (amass_r/6.0_rk)*g(s)*rho_r(x,y,z)&
+               &*matmul(RB_cross,matmul(reshape(c(s,:),(/3,1/))&
+               &,reshape(c(s,:),(/1,3/))))
+          P(i)%FwT = P(i)%FwT + (amass_r/6.0_rk)*g(s)*rho_r(x,y,z)&
+               &*matmul(RB_cross,matmul(matmul(reshape(c(s,:),(/3,1/))&
+               &,reshape(c(s,:),(/1,3/)))&
+               &,RB_cross))
+#endif
+
+          ! save mass change for mass conservation
+          if (mass_correction) then
+#ifdef SINGLEFLUID
+            call correct_mc_fluid_site(N, x, y, z, s, (/ corr_r /))
+#else
+#ifdef NOSURFACTANT
+            call correct_mc_fluid_site(N, x, y, z, s, (/ corr_r, corr_b /))
+#else
+            call correct_mc_fluid_site(N, x, y, z, s, (/ corr_r, corr_b, corr_s /))
+#endif
+#endif
+          else
+            N(x,y,z)%n_r(s) = N(x,y,z)%n_r(s) - corr_r
+#ifndef SINGLEFLUID
+            N(x,y,z)%n_b(s) = N(x,y,z)%n_b(s) - corr_b
+#ifndef NOSURFACTANT
+            N(x,y,z)%n_s(s) = N(x,y,z)%n_s(s) - corr_s
+#endif
+#endif
+          end if
+
+#ifdef LADD_DLUB
+          ! Check whether this is a "half-bridge link" (Ding&Aidun,
+          ! 2003): one lattice site with two different particles at
+          ! opposite lattice directions
+          dx = x-cx(s)
+          dy = y-cy(s)
+          dz = z-cz(s)
+          duid = nint(N(dx,dy,dz)%rock_state)
+          if (is_colloid(N(dx,dy,dz)%rock_state)) then
+             ! This is a half-bridge link. Store it for later
+             ! lubrication correction, exploit Newton's law and avoid
+             ! double counting
+             if (P(i)%uid<duid) call dlub_store_link(&
+                  &P(i)%uid,duid,(/tx,ty,tz/),(/dx,dy,dz/),s,2)
+          end if
+#endif
+
+        else if ( is_wall( N(x,y,z)%rock_state ) ) then rs_from_again
+          ! If there is solid rock assume equilibrium
+          ! densities for velocity 0 at  (/x,y,z/) .
+
+#ifdef OLDRRFORCE
+          ! quick hack to obtain the old behavior concerning foreign
+          ! rock-rock links
+          corr = 0.0_rk
+#endif
+          ! momentum transfer to particle i during bounce-back in the
+          ! next advection step (Assume constant force during one
+          ! timestep and a timestep size of 1, so the force is the
+          ! same as the momentum).
+          fb = -c(s,:)*g(s)*(corr&
+#ifdef LADD_GALILEAN
+               &+corr_gal&
+#endif
+               &)*arhof
+       else rs_from_again      ! source rock_state > 0
+
+          ! If there is another particle assume equilibrium densities
+          ! at position (/x,y,z/) for its local surface velocity
+          ! vo. The surface velocity is evaluated at rb for symmetry
+          ! reasons.
+
+          vo = local_particle_velocity(rbb,nint(N(x,y,z)%rock_state))
+
+#ifdef OLDRRFORCE
+          ! quick hack to obtain the old behavior concerning foreign
+          ! rock-rock links
+          corr = 0.0_rk
+          vo = 0.0_rk
+#endif
+          call boltz_dist_s(vo(1),vo(2),vo(3),0.0_rk,0.0_rk,0.0_rk,0.0_rk&
+               &,0.0_rk,0.0_rk,n_eq_s,s)
+
+          ! momentum transfer to particle  i  during bounce-back in
+          ! the next advection step (Assume constant force during one
+          ! timestep and a timestep size of 1, so the force is the
+          ! same as the momentum).
+#ifdef LADD_SURR_RHOF
+          ! Taking the average of the surrounding densities of both
+          ! particles here not only is a reasonable estimate for the
+          ! actual fluid pressure at the contact link but also leads
+          ! to momentum conservation because it makes fb symmetrical
+          ! for both particles involved.
+          fb = c(s,:)*g(s)*((2.0_rk*n_eq_s-corr&
+#ifdef LADD_GALILEAN
+               &-corr_gal&
+#endif
+               &)*0.5_rk*(arhof&
+               &+amass_r*P(Mii_map(uid2i,nint(N(x,y,z)%rock_state)))%rhof)&
+               &-2.0_rk*n_eq_u0(s)*arhof)
+#else
+          fb = c(s,:)*g(s)*(2.0_rk*(n_eq_s-n_eq_u0(s))-corr&
+#ifdef LADD_GALILEAN
+               &-corr_gal&
+#endif
+               &)*arhof
+#endif
+
+#ifdef LADD_DLUB
+          ! This is a direct particle-particle link. Store it for
+          ! later lubrication correction, exploit Newton's law and
+          ! avoid double counting
+          duid = nint(N(x,y,z)%rock_state)
+          if (P(i)%uid<duid) call dlub_store_link(&
+               &P(i)%uid,duid,(/tx,ty,tz/),(/x,y,z/),s,1)
+#endif
+        end if rs_from_again
+
+        ! apply force and torque
+        P(i)%f_fluid = P(i)%f_fluid + fb(:)
+        P(i)%t_fluid = P(i)%t_fluid + cross_product(rb(:),fb(:))
+#ifdef PARTICLESTRESS
+        ! accumulate_stress() is not used here to avoid the function
+        ! call and (mainly) for the following reason:
+
+        ! fb is only the deviatoric part of the force, add the static
+        ! part for the calculation of the diagonal elements of tau.
+        fbd = fb + c(s,:)*g(s)*2.0_rk*n_eq_u0(s)*arhof
+
+        ! transformation from space fixed to body fixed
+        A = reshape((/&
+             &P(i)%q(0)**2+P(i)%q(1)**2-P(i)%q(2)**2-P(i)%q(3)**2,&
+             &2.0_rk*(P(i)%q(1)*P(i)%q(2)-P(i)%q(0)*P(i)%q(3)),&
+             &2.0_rk*(P(i)%q(1)*P(i)%q(3)+P(i)%q(0)*P(i)%q(2)),&
+
+             &2.0_rk*(P(i)%q(1)*P(i)%q(2)+P(i)%q(0)*P(i)%q(3)),&
+             &P(i)%q(0)**2-P(i)%q(1)**2+P(i)%q(2)**2-P(i)%q(3)**2,&
+             &2.0_rk*(P(i)%q(2)*P(i)%q(3)-P(i)%q(0)*P(i)%q(1)),&
+
+             &2.0_rk*(P(i)%q(1)*P(i)%q(3)-P(i)%q(0)*P(i)%q(2)),&
+             &2.0_rk*(P(i)%q(2)*P(i)%q(3)+P(i)%q(0)*P(i)%q(1)),&
+             &P(i)%q(0)**2-P(i)%q(1)**2-P(i)%q(2)**2+P(i)%q(3)**2&
+             &/),&
+             &(/3,3/))
+        rb_b = matmul(A,rb)    ! body fixed vector to interaction point
+        fb_b = matmul(A,fb)    ! body fixed deviatoric part of the force
+        fbd_b = matmul(A,fbd)  ! body fixed force
+
+        ! Due to the discrete character of the whole method and the
+        ! fact that all calculations are performed numerically,
+        ! unexpected results can happen for values of rb_b(k) around
+        ! 0. Therefore, the respective forces are ignored for stress
+        ! calculation which is no problem, since the sign of their
+        ! contribution is highly questionable anyway.
+        if (abs(rb_b(1))>small) then
+           P(i)%tau(1,1) = P(i)%tau(1,1) + fbd_b(1)*sign(1.0_rk,rb_b(1))
+           P(i)%tau(1,2) = P(i)%tau(1,2) + fb_b(2)*sign(1.0_rk,rb_b(1))
+           P(i)%tau(1,3) = P(i)%tau(1,3) + fb_b(3)*sign(1.0_rk,rb_b(1))
+        end if
+        if (abs(rb_b(2))>small) then
+           P(i)%tau(2,1) = P(i)%tau(2,1) + fb_b(1)*sign(1.0_rk,rb_b(2))
+           P(i)%tau(2,2) = P(i)%tau(2,2) + fbd_b(2)*sign(1.0_rk,rb_b(2))
+           P(i)%tau(2,3) = P(i)%tau(2,3) + fb_b(3)*sign(1.0_rk,rb_b(2))
+        end if
+        if (abs(rb_b(3))>small) then
+           P(i)%tau(3,1) = P(i)%tau(3,1) + fb_b(1)*sign(1.0_rk,rb_b(3))
+           P(i)%tau(3,2) = P(i)%tau(3,2) + fb_b(2)*sign(1.0_rk,rb_b(3))
+           P(i)%tau(3,3) = P(i)%tau(3,3) + fbd_b(3)*sign(1.0_rk,rb_b(3))
+        end if
+#endif
+      end if rs_to
+    end do
+  else rs_from
+    if (use_lbe_force) then
+       call get_total_force(fb(1),fb(2),fb(3),x,y,z)
+
+       if (any(fb/=0.0_rk)) then
+          ! position relative to particle
+          rb = real((/x,y,z/),kind=rk)-(/px,py,pz/)
+
+          ! apply force and torque
+          P(i)%f_fluid = P(i)%f_fluid + fb
+          P(i)%t_fluid = P(i)%t_fluid + cross_product(rb,fb)
+
+! #ifdef PARTICLESTRESS
+!          call accumulate_stress(i,rb,fb)
+! #endif
+       end if
+    end if
+  end if rs_from
+end subroutine prebounce_node
+
+!> store fluid densities of \c N(1:nx,1:ny,1:nz) in \c
+!> rho_(r|b|s)(1:nx,1:ny,1:nz)
+subroutine keep_current_densities(N)
+  type(lbe_site),intent(in) :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer x,y,z
+
+  do x=1,nx
+    do y=1,ny
+      do z=1,nz
+        rho_r(x,y,z) = sum(N(x,y,z)%n_r*g)
+#ifndef SINGLEFLUID
+        rho_b(x,y,z) = sum(N(x,y,z)%n_b*g)
+#ifndef NOSURFACTANT
+        rho_g(x,y,z) = sum(N(x,y,z)%n_s*g)
+#endif
+#endif
+      end do
+    end do
+  end do
+end subroutine keep_current_densities
+
+#ifndef SINGLEFLUID
+!> Calculate the forces on the sites covered by particles and update
+!> the forces and torques on the particles
+subroutine shan_chen_postbounce(N)
+  type(lbe_site),intent(inout)&
+       & :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer i,ii,j,x,y,z      ! loop indices
+  integer :: n_c
+  type(local_chunk_type) :: c(n_max_local_chunks)
+
+  ! loop through own and halo'ed particles
+  i = atompnt
+  particles: do ii = 1,nlocal+nother
+    ! this could be optimized by choosing the respective particle's
+    ! R_max in case of polydispersity instead of ubound_R
+    call local_chunks(P(i),ubound_R,0,n_c,c)
+
+    ! postbounce the up to 8 parts of the box that might have
+    ! intersections with the local chunk.
+    do j=1,n_c
+      do x=c(j)%minx(1),c(j)%maxx(1)
+        do y=c(j)%minx(2),c(j)%maxx(2)
+          do z=c(j)%minx(3),c(j)%maxx(3)
+            call postbounce_node&
+                 &(N,i,c(j)%xc(1),c(j)%xc(2),c(j)%xc(3),x,y,z)
+          end do
+        end do
+      end do
+    end do
+
+    if (ii.le.nlocal) then
+      i = list(i)
+    else
+      i = i + 1
+    endif
+  end do particles
+end subroutine shan_chen_postbounce
+#endif
+
+#ifndef SINGLEFLUID
+!> Checks whether local position (\c x \c y \c z) is part of the
+!> particle \c i (or its pbc image) at local position (\c px \c py \c pz).
+!>
+!> If so the Shan-Chen force on the position is calculated and the
+!> force and torque on the particle is updated
+subroutine postbounce_node(N,i,px,py,pz,x,y,z)
+  type(lbe_site),intent(inout),target &
+       &:: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer,intent(in) :: i,x,y,z
+  real(kind=rk),intent(in) :: px,py,pz
+
+  real*8, dimension(nx,ny,nz,3) :: f_b ! forces on particle species
+  real*8, dimension(nx,ny,nz,3) :: f_r ! at the site
+#ifndef NOSURFACTANT
+  real*8, dimension(nx,ny,nz,3) :: f_s
+#endif
+  real(kind=rk) :: rb(3) ! node position relative to (/px,py,pz/)
+
+  ! the same as N in lbe.F90---ATTENTION: as there, the indices of
+  ! lbe_N start with 1---to avoid confusion better don't use this
+  ! pointer here except for passing it to subroutines expecting
+  ! something as N in lbe.F90 (in these subroutines, the indices then
+  ! start with 0 again and everything is fine)
+  type(lbe_site),pointer :: lbe_N(:,:,:)
+
+  ! position of node relative to particle
+  rb(:) = real((/x,y,z/),kind=rk)-(/px,py,pz/)
+
+  ! calculate forces only for rock nodes owned by particle  i
+  if (N(x,y,z)%rock_state==P(i)%uid) then
+#ifdef NOSURFACTANT
+    lbe_N => N(0:nx+1,0:ny+1,0:nz+1)
+    CALL lbe_calculate_sc_forces(lbe_N,x,y,z,f_b,f_r)
+#else
+    CALL lbe_calculate_sc_forces(lbe_N,x,y,z,f_b,f_r,f_s)
+#endif
+    ! apply force and torque
+#ifdef NOSURFACTANT
+    P(i)%f_fluid = P(i)%f_fluid + f_b(x,y,z,:) + f_r(x,y,z,:)
+    P(i)%t_fluid = P(i)%t_fluid + cross_product(rb(:),f_b(x,y,z,:)+f_r(x,y,z,:))
+#else
+    P(i)%f_fluid = P(i)%f_fluid + f_b(x,y,z,:) + f_r(x,y,z,:) + f_s(x,y,z,:)
+    P(i)%t_fluid = P(i)%t_fluid + cross_product(rb(:),f_b(x,y,z,:)+f_r(x,y,z,:)+f_s(x,y,z,:))
+#endif
+  end if
+end subroutine postbounce_node
+
+#endif
+
+#ifndef SINGLEFLUID
+!> This routine calculates the average density at the non-rock sites
+!> surrounding the site at (\c x,\c y,\c z) and writes them into the
+!> vector \c surroundings.
+!>
+!> The first entry is for red, the second for blue and the third for
+!> green
+subroutine get_surroundings(N,x,y,z,surroundings)
+  type(lbe_site),intent(in) :: N(1-halo_extent:,1-halo_extent:,1-halo_extent:)
+  integer, intent(in) :: x,y,z
+  real(kind=rk),intent(out) :: surroundings(n_spec)
+
+  integer :: s, sitecount
+  sitecount=0
+  surroundings(:)=0.0_rk
+  do s=1,nnonrest
+    if (N(x+cx(s),y+cy(s),z+cz(s))%rock_state==0.0_rk) then
+      sitecount=sitecount+1
+      surroundings(1)=surroundings(1)+sum(N(x+cx(s),y+cy(s),z+cz(s))%n_r*g)
+      surroundings(2)=surroundings(2)+sum(N(x+cx(s),y+cy(s),z+cz(s))%n_b*g)
+#ifndef NOSURFACTANT
+      surroundings(3)=surroundings(3)+sum(N(x+cx(s),y+cy(s),z+cz(s))%n_s*g)
+#endif
+    end if
+  end do
+
+  if (sitecount>0) then
+    surroundings(:)=surroundings(:)/real(sitecount,kind=rk)
+  else
+#ifdef NOSURFACTANT
+    surroundings=(/pfr,pfb/)
+#else
+    surroundings=(/pfr,pfb,pfg/)
+#endif
+  end if
+
+end subroutine get_surroundings
+
+#endif
+
+!> calculates the theoretical volume of a ladd-particle according to
+!> \c R_orth and \c R_para from \c /md_fluid_ladd/. Without
+!> polydispersity or with specific initialization options this is the
+!> average particle volume.
+!>
+!> \returns particle volume \f$4\pi R_\perp^2R_\parallel/3\f$
+pure function avg_particle_volume_fluid_ladd()
+    real(kind=rk) :: avg_particle_volume_fluid_ladd
+    avg_particle_volume_fluid_ladd = 4.0_rk*pi*R_orth*R_orth*R_para/3.0_rk
+end function avg_particle_volume_fluid_ladd
+
+#endif
+end module lbe_md_fluid_ladd_module

@@ -1,0 +1,7 @@
+Syntax: ./rock_gen_spheres <filename>
+
+rock_gen_spheres generates a rock geometry consisting of multiple spheres - regularly or randomly (overlapping or non-overlapping) and writes it to an HDF5 output file <filename>.h5
+Plain text and XDR can also be enabled as output.
+
+The rock_gen_spheres.sh helps automate the process of generating geometries of non-overlapping random spheres (since the program might not be able to place all spheres, multiple tries might be needed -
+if the program fails in this way, the exit code will be 2).

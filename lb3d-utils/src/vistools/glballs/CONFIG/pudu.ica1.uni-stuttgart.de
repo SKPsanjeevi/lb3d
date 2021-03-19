@@ -1,0 +1,22 @@
+CXX=g++
+
+ifdef T_ENABLE_DEBUG
+ OPTFLAGS = -O2 -Wall -g3 -DDEBUG -Werror
+ # -Wall         for lots of warnings
+ # -Werror       for stop compiling when warnings acure
+ # -save-temps   for keeping *.ii , *.s and *.o~ files
+ # -pg           for profiling with gprof
+ # -fomit-frame-pointer
+else
+ OPTFLAGS = -O3 -ffast-math -fomit-frame-pointer -Wall -Werror -fno-exceptions -march=i686
+endif
+
+CXXFLAGS=  -O3 -mcpu=pentiumpro -ffast-math -DWITH_QT
+X11DIR = /usr/X11R6
+QTDIR= /usr/lib/qt-3.0.5
+GLUINCLUDEDIR=.
+GLINCLUDEDIR=.
+GLULIBDIR=/usr/lib
+GLLIBDIR=/usr/lib
+
+LOCAL_CPPFLAGS=

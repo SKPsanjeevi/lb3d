@@ -1,0 +1,5 @@
+The files in this directory are mainly bash scripts which have been used
+for data analysis.
+
+THEY ARE ALL IN ALPHA STATE and fairly quick hacks. Be aware that they
+will probably not work for you without changes.

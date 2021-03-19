@@ -1,0 +1,18 @@
+#!/bin/bash -x
+#MSUB -l nodes=8:ppn=8
+#MSUB -l walltime=1:00:00
+#MSUB -v tpt=1
+#MSUB -M your@emailaddress.com
+#MSUB -m abe
+#MSUB -N testname
+### start of jobscript
+
+#CHANGES THIS:
+WORKDIR=/lustre/jhome2/XXXXXXXXXXXX/lbe/run
+cd $WORKDIR
+echo "workdir: $WORKDIR"
+
+# NSLOTS = nodes * ppn
+#PUT NUM OF CPUS HERE AND AT THE TOP OF THIS FILE
+NSLOTS=64
+mpiexec -np $NSLOTS ./lbe -f input-file.test

@@ -1,0 +1,28 @@
+BASEPATH=@top_srcdir@
+VPATH=@srcdir@
+
+include ../Makefile.config
+
+OBJS = \
+ T_CArg.o\
+ T_CContainer.o\
+
+SRCS=$(patsubst %.o,@srcdir@/%.cc,$(OBJS))
+
+.PHONY : all build install clean distclean test
+	
+all : .depend ../Makefile.config Makefile $(OBJS)
+
+install :
+
+clean : 
+	$(RM) .depend gmon.out *.o *.ii *.s *.o~
+
+distclean : clean
+
+test :
+
+ifeq (.depend,$(wildcard .depend))
+include .depend
+endif
+

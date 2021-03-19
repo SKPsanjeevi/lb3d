@@ -1,0 +1,21 @@
+all: pcorr-3d ma2tadsorbPEOPSQcol ma2tadsorbgrug2th ma2tadsorbKugelOPSQmcol
+
+pcorr-3d:
+	${CXX} -o 2pcorr-3d 2pcorr-3d.cpp -Wall
+
+ma2tadsorbPEOPSQcol:
+	${CXX} -o ma2tadsorbPEOPSQcol ma2tadsorbPEOPSQcol.cc
+
+ma2tadsorbgrug2th:
+	${CXX} -o ma2tadsorbgrug2th ma2tadsorbgrug2th.cc -Wall
+
+ma2tadsorbKugelOPSQmcol:
+	${CXX} -o ma2tadsorbKugelOPSQmcol ma2tadsorbKugelOPSQmcol.cc
+
+clean:
+	rm -f ma2tadsorbPEOPSQcol
+	rm -f ma2tadsorbgrug2th
+	rm -f ma2tadsorbKugelOPSQmcol
+	rm -f 2p-corr-3d
+	rm -f *~
+

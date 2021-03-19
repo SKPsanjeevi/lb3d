@@ -1,0 +1,82 @@
+This subdirectory contains a version of struct_xdr which is different
+to the one in ../struct_xdr . Its features are:
+
+* This version is only single precision, as opposed to both sgl and
+dbl present in ../ .
+
+* This version, as well as that in ../ , contains two methods of
+computing standard errors, METHOD A and B, as explained below.
+
+* This version includes two new features: calculation of the
+(unaveraged) 3D SF, and calculation of cartesian moments of the 3D SF
+and their relevant lateral domain sizes, as explained below, useful
+for shearing studies.
+
+* The version in ../ takes the field 'arr' as an input in addition
+to 'colour', 'od', 'wd', 'owd' and 'sur' (when compiling with
+Makefile_B sgl). This version does not take 'arr' as an input field.
+
+=====
+Notes
+=====
+
+[1] 
+On IRIX64, when optimising with -O3 -64 -mips4 a bus error pops up. 
+
+
+[2] 
+Files *_B.c compute the standard error as:
+
+    stderr = \sqrt(\sigma^2 / N)
+
+where \sigma is directly the avg of sqrd residuals:
+
+   \sigma^2 = 
+   \frac{1}{N-1}\sum (x_j - \bar x)^2
+
+This we'll call METHOD B, as opposed to METHOD A, which uses the more
+common expression derived from expanding the ()^2, which is the avg of
+sqrd data minus the sqr of the avg data:  
+
+   \sigma^2 = \bar x^2 - (\bar x)^2.
+
+Please use METHOD B unless efficiency is too compromised.
+
+
+[3] 
+Use Makefile_B in order to use METHOD B for computing the SDEV, and
+dump the new Rx, Ry and Rz average domain sizes. These are computed
+according to:  
+
+   R_i = DPI / sqrt(iiS)
+
+where i is the relevant cartesian component (in the 'i mod 3' set, i +
+3 = i), DPI is twice pi, and iiS is the second order statistical
+moment of the 3D structure function, S(\mathbf{k}), with respect to
+cartesian component i, namely:  
+
+   iiS = 
+   \sum_{i+2}\sum_{i+1}\sum_i (k_i)^2 S(\mathbf{k}) /
+   \sum_{i+2}\sum_{i+1}\sum_i S(\mathbf{k})
+
+where LaTeX notation has been used, the sums run from 1 up to the
+lattice lateral size, N_i, and the i-th component of the wavevector
+is: 
+
+   k_i = (DPI/N_i) n_i
+
+where n_i is an integer.
+
+
+[4]
+Use Makefile_B_3DSF to dump only the unaveraged SF (using METHOD B)
+and not Rx, Ry and Rz.
+
+NGS 17.OCT.03
+
+
+
+
+
+
+

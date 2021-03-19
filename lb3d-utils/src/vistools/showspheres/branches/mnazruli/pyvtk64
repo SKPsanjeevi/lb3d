@@ -1,0 +1,8 @@
+# Sets up environment for python and vtk. Source, not execute!
+export LD_LIBRARY_PATH=/usr/local64/stow/VTK-5.0.3/lib64:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/local64/stow/VTK-5.0.3/lib:$LD_LIBRARY_PATH
+export PYTHONPATH=/usr/local64/stow/VTK-5.0.3/lib64/python2.5/site-packages:$PYTHONPATH
+
+
+
+

@@ -1,0 +1,4 @@
+The sigma and pres data files included in this directory have been
+generated using the following command:
+
+./sigma -input input-file1 -data ./pl_tst_NS -result ./ -z

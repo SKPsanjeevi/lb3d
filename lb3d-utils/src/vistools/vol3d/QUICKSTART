@@ -1,0 +1,339 @@
+This isn't even documentation.
+
+COMPILING
+---------
+
+./configure && make
+
+On the CCS Opteron machines, use:
+LDFLAGS="-L/usr/local64/lib" ./configure && make
+
+This should autodetect available libraries, and build the vol3d system
+and apps. The main three are:
+        
+        volutil : command-line volume generation/manipulation utility
+
+        gi : isosurfacer
+
+        vr : volume renderer.
+
+QUICK RUN-THROUGH
+-----------------
+
+./volutil -d 64,64,64 -o test.xdr gyroid 4 # Generate a gyroid dataset
+export __GL_FSAA_MODE=8                    # Turn on NVIDIA card antialiasing
+./gi test.xdr                              # View isosurface.
+./vr test.xdr                              # View volume rendering.
+
+
+VOLUTIL
+-------
+
+Volutil was originally written as a utility to convert between
+floating-point, XDR, and HDF5 datasets; I started adding code for image
+processing algorithms while analysing the TeraGyroid datasets, and it
+just grew and grew.
+
+The general form of invocation is:
+
+volutil [options] -i <inputfile> -o <outputfile> [operation [arguments]]
+
+It will normally try to guess the file type from its extension, although
+this can be overridden with the -f and -g switches. If the file doesn't
+contain any information about its geometry, then it will be assumed to
+be a cube if it's an appropriate size, otherwise you need to specify the
+geometry with the -d option.
+
+Conversion mode
+---------------
+
+If you don't supply an operation to be performed, then it just copies
+the input to the output. This is how you do file conversion, eg:
+
+volutil -i input.xdr -o output.h5   # Convert to HDF5
+
+Generation mode
+---------------
+
+Some operations are for generation of a dataset from scratch, and do not
+need an input file to be specified. They do need you to specify the
+geometry, though.
+
+volutil -d 32,32,32 -o noise.xdr whitenoise # Generates a noise dataset
+
+Stats mode
+----------
+
+Some operations read an input file and then just print some information
+about it to stdout; they don't need an output file.
+
+volutil -i test.xdr sfactor  # Prints out structure factor S(k).
+
+Filter mode
+-----------
+
+Most operations take an input file, perform an operation on it, and
+write the result to an output file. The operation may take control
+arguments.
+
+volutil -i test.xdr -o new.xdr abs # Write abs value of test.xdr to new.xdr
+
+volutil -i test.xdr -o gt.xdr gt 0.1 # Write out all points >0.1
+
+Run volutil with no arguments to get a list of all possible options.
+Then keep hassling me until I document them properly.
+
+Options
+-------
+
+-n : do not calculate surface normals
+
+-i <infile> : specify input file. Not needed if you're generating a
+              dataset.
+
+
+-o <outfile> : specify output file.
+
+-d <nx>,<ny>,<nz> : specify dataset dimensions
+
+-f <filetype> : specify input file type, which can be one of raw, xdr,
+                iso, or hdf5.
+
+-g <filetype> : specify output file type, which can be one of
+                raw, xdr, iso, hdf5, vtk, ucvtk, ucnrrd, fnrrd, or uc.
+
+        Filetypes:
+
+                raw : raw, machine-dependent floating-point data.
+
+                xdr : xdr
+
+                iso : a simple raw data format with a geometry header.
+
+                hdf5 : HDF5 (only supported if you have libhdf5)
+
+                vtk : VTK binary floating-point dataset.
+
+                ucvtk : VTK binary unsigned byte dataset
+
+                ucnrrd : NRRD unsigned char (see http://teem.sf.net/ )
+
+                fnrrd : floating-point NRRD
+
+                uc : raw unsigned char
+
+-p <path> : supplies a path for inside HDF5 files. Defaults to
+          "/OutArray".
+
+
+-h, -? : prints some help. Not very helpful.
+
+
+GI
+--
+
+"gi" is a contraction of "glutiso", which is a contraction of
+"isosurface viewer which uses the GLUT toolkit to open an OpenGL window
+and interact with the user".
+
+Usage:
+
+gi [-t <isoval>] [options] file1 [file2 [file3 ...]]]
+
+If you feed gi multiple files, it will load and process them all; the
+mouse wheel moves between files.
+
+Interaction
+-----------
+
+Left mouse button: rotate
+Middle mouse button: translate
+Right mouse button + up/down : zoom
+Mouse wheel: switch between files
+
+Keys:
+
+Q : exit
+< , > : adjust field of view angle. 
+i : turn isosurface rendering on/off
+! : invert background colour
+d : dump orientation to stdout
+[ , ] : adjust fog level
+a : toggle drawing of XYZ axes
+p : toggle orthographic (non-perspective) projection
+o : toggle outline box
+h : toggle specular reflections
+m : toggle mesh outline. This will make rendering REALLY SLOW.
+D : toggle debug overlay. This effect is undefined and may crash your machine.
+c : toggle a cuberille outlining each voxel.
+f : toggle fogging
+s : toggle automatic spinning.
+z, x : switch files
+v : in debug mode, for small datasets, individually number each vertex.
+t : in debug mode, for small datasets, individually number each triangle.
+
+w : toggle mesh wrapping. If mesh wrapping is on, going to the next file
+    after the last file wraps round to the first file, otherwise it sits at
+    the last.
+
+/ , \ : in stereo mode, adjust the distance between renderer's "eyes".
+        Setting this too large may induce nausea (no, really; ask Matt).
+
+S : dump a screenshot. Does not work if either of the window dimensions
+    is an odd number. Poke me until I fix this. Note that it saves the alpha
+    channel as well, so you can blend the image onto your documents or web
+    page background...
+
+
+
+Command line options
+--------------------
+
+-N : use "reload mode". Running "gi -N foo" will scan the current
+
+     directory for all files beginning with "foo", and load and display
+     the newest one. It then periodically rescans the directory and
+     loads the most recent file if new files appear. This can be used to
+     build a flaky sort of computational steering client. See 
+     http://ccs.chem.ucl.ac.uk/CCS/Steerable_20LB3D_20Demo for more
+     info.
+
+-z : normalize scalars. If using curvature colouring and loading with
+     multiple files, ensures all files are using the same colour mapping.
+
+-T : print timing statistics.
+
+-C : colour a surface by its curvature, by default the mean curvature H.
+
+-n : suppress surface normals, giving a blocky appearance.
+
+-S <fudgefactor> : fudge the colour mapping. Poke me until this does
+                   something sensible.
+
+-s : render in stereo mode. Requires a GLX_STEREO visual.
+
+-w : render in windowed stereo mode: opens two windows: one for the left
+     eye, one for the right. Handy if you have a twinview graphics card
+     with two projectors; alternatively, move back from your screen and
+     cross your eyes to get very cheap stereo rendering.
+
+-x <npixels> : for windowed stereo mode, set the right-eye window to
+               open exactly <npixels> pixels to the right of the
+               left-eye window.
+
+-b <r>,<g>,<b> : set background colour. r,g,b are between 0 and 1.
+
+-c : assume the supplied files are in <iso>,<scalar> pairs: generate an
+     isosurface from the iso files, and colour it by the scalar files.
+     For example, if you want to colour an oil-water interface by
+     surfactant density, then try:
+
+     gi -c colour.xdr surf.xdr
+
+-g : used with -C, colour a surface by its Gaussian (rather than mean)
+     curvature
+
+-D : turn on debug mode. Your computer may explode if you do this, or it
+     may simply slow down and print immense amounts of debugging info.
+
+-i <r>,<g>,<b> : set isosurface inner colour.
+
+-o <r>,<g>,<b> : set isosurface outer colour.
+
+-t <val> : set isosurface contour level to <val>.
+
+-d <x>,<y>,<z> : set dimensions of input dataset to x,y,z.
+
+-f <type> : set input file type. Can be raw, xdr, or hdf5.
+
+
+VR
+--
+
+"vr" is a contraction of "Volume Renderer". It uses an astoundingly
+cheap and shitty rendering algorithm, one consequence of which is that
+it WILL NOT RENDER THE OUTER LAYER OF VOXELS IN ANY DATASET because I
+can't be bothered to clip the view-aligned polygons properly; ping me if
+this bothers you. That said, it's quite handy as a quick and dirty
+visualization tool. It currently works in a way not unlike gi, although
+the internal implementation is somewhat cleaner, and I'd like to move gi
+over to the same toolkit at some point.
+
+Usage:
+
+vr [options] file1 [file2 [file3 ...]]]
+
+If you feed vr multiple files, it will load and process them all; the
+mouse wheel moves between files.
+
+
+The Transfer Function
+---------------------
+
+When it's running, vr opens two windows. One shows the rendering; the
+other shows a graph of the voxel populations, and the corresponding
+transfer function curves.
+
+Volume rendering works by taking each voxel in a volume and, based on
+its value, assigning it a colour (in RGB format) and a translucency
+(called "alpha"). The mapping from voxel value to RGBA pixel value is
+called the "transfer function"; different choices of transfer function
+will highlight different features. 
+
+The TF window shows a white graph with voxel value on the X axis, and
+the number of voxels with that value on the Y axis. The r,g,b, and a
+keys toggle the graphs mapping voxel value to red, green, blue, and
+alpha values. Clicking on a point in the window will automatically set
+any visible graphs to contain that point. I find I tend to turn off the
+RGB graphs and just change alpha (the multicoloured graph).
+
+Once you've adjusted the transfer function, hit the spacebar in the TF
+window to update the volume rendering. 
+
+Interaction
+-----------
+
+Mouse motions and buttons are the same as gi.
+
+There are several floating-point parameters which can be adjusted in vr.
+gi assigns different keys to each of these; vr uses a more general
+scheme. Select which parameter you wish to change using the "<" and ">"
+keys; the current one is printed to stdout. Then adjust it using the ","
+and "." keys (the same keys, but without "shift" being held down).
+Currently you can change the start and end values of the fog field, the
+fog intensity, the Field of View Angle, and a global transparency
+parameter.
+
+Keys:
+
+s : dump screenshot. No alpha channel is dumped.
+
+S : save viewer state to disk, in the file "save.vrState".
+
+p : toggle orthographic projection. 
+
+o : toggle outline box.
+
+f : toggle fogging.
+
+< , > : switch current float parameter
+
+, , . : change current float parameter
+
+` : straighten the viewer. Try it, you'll like it.
+
+
+WHAT TO DO IF YOU SEEK VISUAL STIMULATION
+-----------------------------------------
+
+volutil -d 64,64,64 -o test.xdr gyroid 4 # generate a gyroid file.
+export __GL_FSAA_MODE=8                    # Turn on NVIDIA card antialiasing
+gi -gC test.xdr                         # Run gi
+
+Now, hold down ">" until the FOV angle is around 140 degrees, then zoom
+into the gyroid. Trippy, huh? Hit "s" to turn on autospin, and "f" and
+"h" to make the surface a little shinier. Just holding the "<" key down
+can be quite mindbending.
+
+You can do similar tricks with the FOV using vr.
+

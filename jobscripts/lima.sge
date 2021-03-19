@@ -1,0 +1,34 @@
+#!/bin/bash -l
+#PBS -l nodes=4:ppn=24
+#PBS -l walltime=24:00:00
+#PBS -N LIMA_job 
+#PBS -j eo
+#PBS -M first.lastname@your.site.edu -m abe
+#
+# Use 'qsub <jobfile>' to submit.
+#
+
+# Load required modules
+module load intel64
+module load intelmpi
+module load hdf5/parallel
+
+# number of cores to use per node
+export PPN=12
+# count the number of nodes
+export NODES=`uniq $PBS_NODEFILE | wc -l`
+
+# change to working directory
+cd ${PBS_O_WORKDIR}
+
+# some exit/error traps for cleanup
+trap 'echo; echo "*** Signal TERM received: `date`"; echo; rm pbs_nodefile.${PBS_JOBID}; exit' TERM
+trap 'echo; echo "*** Signal KILL received: `date`"; echo; rm pbs_nodefile.${PBS_JOBID}; exit' KILL
+
+# call LB3D
+
+/apps/rrze/bin/mpirun_rrze-intelmpd -npernode 12 -pin 0_1_2_3_4_5_6_7_8_9_10_11 -np 48 PATH/TO/lbe -f input-file 2>&1 |tee log.txt
+
+# final clean up
+rm pbs_nodefile.${PBS_JOBID}
+

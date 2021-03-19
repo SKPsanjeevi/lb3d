@@ -1,0 +1,23 @@
+#!/usr/sbin/perl
+
+my $outfile = shift;
+my $nx=shift;
+my $ny=shift;
+my $nz=shift;
+
+
+open (OUTFILE,">$outfile") or die ("Unable to open $outfile");
+
+for my $z (1..$nz) {
+	for my $y (1..$ny) {
+		for my $x (1..$nx) {
+			if (rand()<0.4) {
+				print OUTFILE "$x $y $z 1\n";
+			} else {
+				print OUTFILE "$x $y $z 0\n";
+			}
+		}
+	}
+}
+
+close OUTFILE

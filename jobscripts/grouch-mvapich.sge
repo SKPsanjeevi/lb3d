@@ -1,0 +1,23 @@
+#!/bin/bash
+#$ -N GROUCH_job # set name of job
+#$ -S /bin/bash
+#$ -M first.lastname@your.site.edu
+#$ -m beas # email on (b)egin (e)nd (a)bort (s)uspend (n)ever
+#$ -l h_rt=00:30:00 # hard limit 30 min run
+# Parallel environment is set to mpich, number is requested threadcount
+#$ -pe mpich 64
+#$ -cwd # Use current working directory
+#$ -o $JOB_NAME.$JOB_ID.out
+#$ -e $JOB_NAME.$JOB_ID.err
+#$ -notify # send notification SIGnals to processes
+# See 'man qsub' for a complete list
+
+# Use 'qsub <jobfile>' to submit.
+
+export LD_LIBRARY_PATH=/usr/local/stow/hdf5-1.8.13-mvapich2-2.0-intel-14.0.3/lib/:/usr/local/stow/mvapich2-2.0-intel-14.0.3/lib
+source /usr/local/intel/composer_xe_2013_sp1.3.174/bin/compilervars.sh intel64
+# No Cross-Memory Attach
+export MV2_SMP_USE_CMA=0
+
+/usr/local/stow/mvapich2-2.0-intel-14.0.3/bin/mpirun ./lbe -f input-file
+

@@ -1,0 +1,22 @@
+.KEEP_STATE:
+.SUFFIXES: .c .f .o
+
+LIBS    = -lm -lz
+LIBS2   = -lm -lhdf5  -I/usr/local/HDF5/hdf5-1.8.8-linux-x86_64-shared/include/ -L/usr/local/HDF5/hdf5-1.8.8-linux-x86_64-shared/lib/
+XLIBS   = #-lXm -lXt -lXext -lX11 -lm
+CFLAGS  = #-g
+CC      = /usr/local/intel/11.1/046/bin/intel64/icc
+OBJ     = main.o help.o tools.o caller.o read_data.o decode.o fft.o circ_avg_B.o domain_size_B.o xydomain_size_B.o dump_to_files.o sfmisc.o rlft3_d.o fourn_d.o
+OBJ2    = main.o help.o tools.o caller.o read_data.o decode_HDF.o readhdfmain.o fft.o circ_avg_B.o domain_size_B.o xydomain_size_B.o dump_to_files.o sfmisc.o rlft3_d.o fourn_d.o
+TARGET  = struct_xdr
+TARGET2 = struct_hdf
+
+.c.o:  ; ${CC}  -c ${CFLAGS} ${INCL} $*.c
+
+lgas:	$(OBJ)
+	${CC}  $(CFLAGS) $(OBJ) -o $(TARGET) $(LIBS)
+hdf:	$(OBJ2)
+	${CC}  $(CFLAGS) $(OBJ2) -o $(TARGET2) $(LIBS2)
+clean: 
+	rm -f *.o *.s *~ $(TARGET) $(TARGET2)
+

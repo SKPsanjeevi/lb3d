@@ -1,0 +1,8 @@
+# Each line in this file is treated as a set of compiler flags that
+# should be tested and confirmed as working together
+#
+NOSURFACTANT USEHDF MD
+NOSURFACTANT USEHDF
+SINGLEFLUID USEHDF MD
+SINGLEFLUID USEHDF
+USEHDF MD
