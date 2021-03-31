@@ -1,0 +1,4 @@
+# drag_tests
+*.mod
+*.o
+drag_tests/nonsph/comsol
