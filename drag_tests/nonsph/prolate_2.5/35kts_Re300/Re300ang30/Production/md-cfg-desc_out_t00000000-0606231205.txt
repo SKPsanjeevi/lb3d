@@ -1,0 +1,1 @@
+      time              fx              fy              fz              tx              ty              tz             fnx             fny             fnz             ftx             fty             ftz

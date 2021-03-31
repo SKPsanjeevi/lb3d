@@ -1,0 +1,21 @@
+ Run on         144  procs for           1  particles
+ 
+ Neighs:           0.0000 ave       0.0000 max       0.0000 min
+  Histogram:   144      0      0      0      0      0      0      0      0      0
+ Nlocal:           0.0069 ave       1.0000 max       0.0000 min
+  Histogram:   143      0      0      0      0      0      0      0      0      1
+ Nother:           0.1042 ave       1.0000 max       0.0000 min
+  Histogram:   129      0      0      0      0      0      0      0      0     15
+ Nswaps:           0.1042 ave       4.0000 max       0.0000 min
+  Histogram:   136      0      4      0      0      2      0      1      0      1
+ 
+ Max # of local atoms =           1  out of        1555
+ Max # of other atoms =           1  out of       41383
+ Max # of neighbors =           0  out of      622000
+ Max size of swap list =           4  out of       82766
+ Max used in exchange buffer =           0  out of       41383
+ Max used in swap buffer =           1
+ 
+ rs =   69.5000000000000       Cut/Box =   1.44791666666667       0.723958333333333       0.482638888888889     
+ 
+ # of reneighborings =           1

@@ -1,0 +1,1050 @@
+rm: cannot remove ‘rockconf’: No such file or directory
+rm: cannot remove ‘../rocks/*’: No such file or directory
+17:09:07 - 
+17:09:07 - Initialized MPI_COMM_WORLD, starting output.
+17:09:07 - 
+17:09:07 - Requested 320 processors.
+17:09:07 - 
+17:09:07 - =========( Starting LB3D-version6 (37921eb (with local changes), master) )==========
+17:09:07 - 
+17:09:07 - LB3D platform: JOULE
+17:09:07 - LB3D flags: -DUSEXDRF  -DSINGLEFLUID -DINTERPOLATEDBB -DMD
+17:09:07 - 
+17:09:07 - ============================( Reporting compiler flags )============================
+17:09:07 - 
+17:09:07 -   MD
+17:09:07 -   NOSURFACTANT
+17:09:07 -   SINGLEFLUID
+17:09:07 -   USEXDRF
+17:09:07 - 
+17:09:07 - 
+17:09:07 - NOIEEEARITHMETIC is not set, NaNs are checked through function 'ieee_is_nan'.
+17:09:07 - 
+17:09:07 - 
+17:09:07 - =========================( Parsing command line arguments )=========================
+17:09:07 - 
+17:09:07 - Found -f input-default
+17:09:07 - 
+17:09:07 - Registering timers ...
+17:09:07 - 
+17:09:07 - 
+17:09:07 - ==============================( Reading fixed input )===============================
+17:09:07 - 
+17:09:07 - Variable inp_file = <input-default>.
+17:09:07 - nx = 320, ny = 640, nz = 900
+17:09:07 - seed                = 1
+17:09:07 - boundary_cond       = -1
+17:09:07 - boundary            = <periodic>
+17:09:07 - obs_file            = <empty.dat>
+17:09:07 - gw_rock_colour   = F
+17:09:07 - rock_colour_double   = F
+17:09:07 - g_value_double   = F
+17:09:07 - gw_double_wet   = F
+17:09:07 - gw_wet_global  = T
+17:09:07 - force               = <none>
+17:09:07 - galilean_stabilizer = F
+17:09:07 - mass_scaler         = F
+17:09:07 - cdx = 0, cdy = 0, cdz = 0
+17:09:07 - 
+17:09:07 - Read and broadcast fixed input.
+17:09:07 - 
+17:09:07 - 
+17:09:07 - RANLUX luxury level set by rluxgo to 4, P = 389
+17:09:07 - Generated UID <1255513830>.
+17:09:07 - 
+17:09:07 - ==========================( Creating MPI Cartesian grid )===========================
+17:09:07 - 
+17:09:07 - Processors using a 8 x 8 x 5 grid.
+17:09:07 - Grid decomposition in blocks of size: 40 x 80 x 180.
+17:09:07 - 
+17:09:07 - ===============================( Reading LBE input )================================
+17:09:07 - 
+17:09:07 - 
+17:09:07 - collisiontype   = <BGK>
+17:09:07 -   -> Using BGK collision model.
+17:09:07 - 
+17:09:07 - kbT             =    -0.0000001000
+17:09:07 - Tcs             =     0.3773000000
+17:09:07 - zeroforceoffset = T
+17:09:07 - write_AVS_fld   = F
+17:09:07 - dump_double     = F
+17:09:07 - SCMP            = F
+17:09:07 - dump_format     = <hdf>
+17:09:07 - xdrfsloppy      = F
+17:09:07 - 
+17:09:07 - n_sanity_check      = 500
+17:09:07 - n_checkpoint        = 0
+17:09:07 - checkpoint_format   = <xdr>
+17:09:07 - checkpoint_safe     = T
+17:09:07 - checkpoint_shearsum = T
+17:09:07 - num_chkp_files      = 2
+17:09:07 - 
+17:09:07 - interpolation_order        = 1
+17:09:07 - bcsel        = 2
+17:09:07 - bdist        = 2
+17:09:07 - psifunc      = 2
+17:09:07 - 
+17:09:07 - amass_r      =     1.0000000000
+17:09:07 - tau_r        =     0.5128600000
+17:09:07 - g_rr         =     0.0000000000
+17:09:07 - g_wr         =     0.0000000000
+17:09:07 - g_wb         =     0.0000000000
+17:09:07 - 
+17:09:07 - tau_wr       =     1.0000000000
+17:09:07 - tau_wb       =     1.0000000000
+17:09:07 - 
+17:09:07 - perturbation =     0.0000000000
+17:09:07 - 
+17:09:07 - shear_u      =     0.0000000000
+17:09:07 - shear_omega  =     0.0000000000
+17:09:07 - 
+17:09:07 - g_accn_fluid_r = F
+17:09:07 - g_accn_fluid_b = F
+17:09:07 - g_accn_fluid_s = F
+17:09:07 - g_accn         =     0.0000000000
+17:09:07 - g_accn_x       =     0.0000000000
+17:09:07 - g_accn_y       =     0.0000000000
+17:09:07 - g_accn_min     = 0
+17:09:07 - g_accn_min_x   = 0
+17:09:07 - g_accn_min_y   = 0
+17:09:07 - g_accn_max     = 900
+17:09:07 - g_accn_max_x   = 320
+17:09:07 - g_accn_max_y   = 640
+17:09:07 - 
+17:09:07 - Read and broadcast LBE input.
+17:09:07 - 
+17:09:07 - 
+17:09:07 - =============================( Reading variable input )=============================
+17:09:07 - 
+17:09:07 - n_iteration    = 50000
+17:09:07 - n_sci_start    = 35000
+17:09:07 - 
+17:09:07 - sci_od         = F, n_sci_od           = 20000
+17:09:07 - sci_vel        = F, n_sci_vel          = 10000
+17:09:07 - sci_flo        = F, n_sci_flo          = 100
+17:09:07 - sci_vel_correction        = T
+17:09:07 - sci_arrows     = F, n_sci_arrows       = 100
+17:09:07 - sci_velocities = F, n_sci_velocities   = 30000
+17:09:07 - sci_velocities_od = F, n_sci_velocities_od   = 100
+17:09:07 - sci_velocities_wd = F, n_sci_velocities_wd   = 100
+17:09:07 - sci_flux_od = F, n_sci_flux_od   = 100
+17:09:07 - sci_flux_wd = F, n_sci_flux_wd   = 100
+17:09:07 - sci_rock       = F, n_sci_rock         = 10000
+17:09:07 - sci_rock_colour= F, n_sci_rock_colour  = 100
+17:09:07 - sci_rock_rho_r = F, n_sci_rock_rho_r   = 100
+17:09:07 - sci_rock_rho_b = F, n_sci_rock_rho_b   = 100
+17:09:07 - sci_pressure   = F, n_sci_pressure     = 100
+17:09:07 -                     sci_pressure_init  = 1
+17:09:07 - sci_profile    = F, n_sci_profile      = 100
+17:09:07 -                     n_sci_profile_dump = 1
+17:09:07 - sci_arrstats   = F, n_sci_arrstats     = 100
+17:09:07 - sci_fluxz      = F, n_sci_fluxz        = 100
+17:09:07 - sci_massfluxz  = F, n_sci_massfluxz    = 100
+17:09:07 - sci_stress     = F, n_sci_stress       = 100
+17:09:07 - 
+17:09:07 - Regions for fluxz / massfluxz:
+17:09:07 -   <>: x = [1:0], y = [1:0], z = [1:0]
+17:09:07 - Intervals for arrstats:
+17:09:07 -   <>: n_sci_arrstats_dump = 1
+17:09:07 - 
+17:09:07 - post        = T
+17:09:07 - folder      = <Production>
+17:09:07 - cpfolder    = <.>
+17:09:07 - gr_out_file = <out>
+17:09:07 - restore     = F
+17:09:07 - init_cond   = -5
+17:09:07 - vel_poiseuille_max =     0.0000000000
+17:09:07 - inv_fluid   = 18, inv_type = 0
+17:09:07 - 
+17:09:07 - fr          =     1.0000000000
+17:09:07 - fr1         =    16.0000000000
+17:09:07 - fr2         =    16.0000000000
+17:09:07 - pr          =     0.0900000000
+17:09:07 - qr          =     0.5000000000
+17:09:07 - m_evp       =     0.0000000000
+17:09:07 - m_evp_gr       =     0.0000000000
+17:09:07 - m_evp_gb       =     0.0000000000
+17:09:07 - m_evp_freq_f       =     0.0000000000
+17:09:07 - m_evp_freq_a       =     0.0000000000
+17:09:07 - in_evp      = (F,F,F)
+17:09:07 - out_evp     = (F,F,F)
+17:09:07 - m_evp_set_density       = F
+17:09:07 - rock_colour_init   = F
+17:09:07 - beta        =     1.0000000000
+17:09:07 - 
+17:09:07 - Read and broadcast variable input.
+17:09:07 - 
+17:09:07 - 
+17:09:07 - =============================( [MD] Reading MD input )==============================
+17:09:07 - 
+17:09:07 - n_dump             = 10, dump_format = <asc>
+17:09:07 - dump_double        = F
+17:09:07 - dump_ids           = F, dump_positions    = F
+17:09:07 - dump_velocities    = F, dump_forces       = T
+17:09:07 - dump_quaternions   = F, dump_orientations = F
+17:09:07 - dump_rotations     = F, dump_torques      = T
+17:09:07 - dump_mag     = F
+17:09:07 - dump_potentials    = F, dump_pnd          = F
+17:09:07 - dump_radii         = F
+17:09:07 - dump_summary       = T
+17:09:07 - dump_time          = T
+17:09:07 - n_dump_substep     = 0
+17:09:07 - n_stat             = 0
+17:09:07 - count_periodic     = F
+17:09:07 - 
+17:09:07 - n_rvz_profile_dump = 1, n_rvz_profile_sample = 0
+17:09:07 - n_dfz              = 0
+17:09:07 - dfz_minx           = -1, dfz_maxx = -1
+17:09:07 - 
+17:09:07 - interaction        = <ladd>
+17:09:07 - potential          = <none>
+17:09:07 - rock               = <none>
+17:09:07 - rock_friction               = <none>
+17:09:07 - growing_stage      = F
+17:09:07 - md_magnetic      = F
+17:09:07 - lyapunov           = F
+17:09:07 - 
+17:09:07 - no_md_leesedwards              = T
+17:09:07 - md_leesedwards_reproducible_cp = F
+17:09:07 - 
+17:09:07 - initial_placing    = <file:asc/xvow>
+17:09:07 -   init_file        = <init.cfg>
+17:09:07 - 
+17:09:07 - initial_velocities   = <none>
+17:09:07 - initial_orientations = <none>
+17:09:07 - initial_rotations    = <w0>
+17:09:07 -   w0                 = (    0.0000000000,    0.0000000000,    0.0000000000)
+17:09:07 - 
+17:09:07 - delta_x            =     0.0000000001
+17:09:07 - delta_t            =     0.0000000001
+17:09:07 - delta_m            =     0.0000000001
+17:09:07 - 
+17:09:07 - steps_per_lbe_step = 1
+17:09:07 - average_ft_fluid   = F
+17:09:07 - average_vw_fluid   = T
+17:09:07 - rho                =     1.0000000000
+17:09:07 - mass               =    -1.0000000000
+17:09:07 - inertia_orth       =    -1.0000000000
+17:09:07 - inertia_para       =    -1.0000000000
+17:09:07 - 
+17:09:07 - ineigh             = 0
+17:09:07 - rc                 =    69.0000000000
+17:09:07 - rs                 =    69.5000000000
+17:09:07 - 
+17:09:07 - semiper_max        = (F,F,F)
+17:09:07 - semiper_min        = (F,F,F)
+17:09:07 - diffuse_[xyz]      = (T,T,T)
+17:09:07 - 
+17:09:07 - reenter_rdm_min    = (F,F,F)
+17:09:07 - reenter_rdm_max    = (F,F,F)
+17:09:07 - 
+17:09:07 - reflective_rocks   = F
+17:09:07 - molec_mass         =     0.0000000000
+17:09:07 - molec_mass_lbm     =     0.0000000000
+17:09:07 - temperat           =   273.0000000000
+17:09:07 - mean_free_path     =     1.0000000000
+17:09:07 - 
+17:09:07 - cutoff_v           =  1000.0000000000
+17:09:07 - fix_v              = T, fix_w = T, fix_vx = F
+17:09:07 - fix_vx_t        = 0
+17:09:07 - fix_vz   = F
+17:09:07 - fix_vz_t        = 0
+17:09:07 - constant_f         = (    0.0000000000,    0.0000000000,    0.0000000000)
+17:09:07 - cargo_par      = F
+17:09:07 - cargo_par_id        = 4
+17:09:07 - constant_fc         =(    0.0000000000,    0.0000000000,    0.0000000000)
+17:09:07 - constant_t         = (    0.0000000000,    0.0000000000,    0.0000000000)
+17:09:07 - constant_tc         = (    0.0000000000,    0.0000000000,    0.0000000000)
+17:09:07 - constant_f_y_min         =     0.0000000000
+17:09:07 - gaussian_plane_active         = F
+17:09:07 - gaussian_plane_pos         =     0.0000000000
+17:09:07 - gaussian_plane_E         =     0.0000000000
+17:09:07 - gaussian_plane_c         =     0.0000000000
+17:09:07 - gaussian_plane_sqwidth         =     0.0000000000
+17:09:07 - boundary_width     =     0.0000000000
+17:09:07 - randompartforce         = F
+17:09:07 - runtime_particle_mod         = F
+17:09:07 - rpm_miny         =     0.0000000000
+17:09:07 - rpm_numpart        = 0
+17:09:07 - rpm_addintervall        = 0
+17:09:07 - rpm_deleteintervall        = 0
+17:09:07 - rpm_minpartdist         =     0.0000000000
+17:09:07 - [MD] n_msdx             = 0
+17:09:07 - [MD] n_msdy             = 0
+17:09:07 - [MD] n_msdz             = 0
+17:09:07 - 
+17:09:07 - 
+17:09:07 - ==========================( [MD] Reading MD F Ladd input )==========================
+17:09:07 - 
+17:09:07 - R_orth                 =    15.0000000000
+17:09:07 - R_para                 =    60.0000000000
+17:09:07 - initial_radii          = <none>
+17:09:07 - lubrication            = F
+17:09:07 - delta_c                =     0.6666666667
+17:09:07 - delta_c_T              =     0.5000000000
+17:09:07 - delta_c_R              =     0.4300000000
+17:09:07 - lubrication_clip_dist  =     0.0066666667
+17:09:07 - lubrication_stiffness  =     0.0000000000
+17:09:07 - lubrication_tangential = F
+17:09:07 - lubrication_cox        = F
+17:09:07 - lubrication_cox_max_store_points = 100
+17:09:07 - mass_correction        = F
+17:09:07 - particle_colour        =     0.0000000000
+17:09:07 - n_print_overlap        = 10
+17:09:07 - Janus_para            = F
+17:09:07 - particle_colour_top        =     0.0000000000
+17:09:07 - particle_colour_bottom        =     0.0000000000
+17:09:07 - alpha        =     0.0000000000
+17:09:07 - n_janus        =     0.0000000000
+17:09:07 - 
+17:09:07 - 
+17:09:07 - ==============================( Setting halo_extent )===============================
+17:09:07 - 
+17:09:07 - Initial halo_extent = 1.
+17:09:07 - Requested halo extensions:
+17:09:07 -   MD Ladd: 1
+17:09:07 - Taking maximum value and setting halo_extent = 1.
+17:09:07 - 
+17:09:07 - ===============================( Allocating lattice )===============================
+17:09:07 - 
+17:09:07 - Succesfully allocated lattice with halo_extent = 1 .
+17:09:07 - 
+17:09:07 - ==============================( Initializing system )===============================
+17:09:07 - 
+17:09:07 - Initializing system using B_DIST with Z velocity.
+17:09:07 - Setting up rock geometry.
+17:09:07 - Special value obs_file = <empty.dat> : no rock file will be read.
+17:09:07 -   boundary_cond < 0: No additional rock geometry will be added (but special BCs might be applied).
+17:09:07 - Creating MPI datatype for rock fields with halo_extent = 1
+17:09:07 - Creating MPI datatypes for rock field chunks ...
+17:09:12 - Successfully initialized system!
+17:09:12 - 
+17:09:12 - ============================( [MD] Initializing system )============================
+17:09:12 - 
+17:09:12 - [MD] Initialized mass =  5.65486678E+04
+17:09:12 - [MD] Initialized inertia_orth =  4.32597308E+07
+17:09:12 - [MD] Initialized inertia_para =  5.08938010E+06
+17:09:12 - [MD] Finished setup_general.
+17:09:12 - [MD] Finished setup_computations.
+17:09:12 - [MD] npmax = 1350 , nomax = 41938 , namax = 43288
+17:09:12 - [MD] nemax = 83876 , nfmax = 41938
+17:09:12 - [MD] Finished setup_memory.
+17:09:12 - [MD] Successfully passed debug_check_send_bounds().
+17:09:12 - [MD] Finished setup_parallel.
+17:09:12 - [MD] Lees-Edwards boundaries for MD particles are inactive.
+17:09:12 - [MD] Finished setup_md_leesedwards.
+17:09:12 - [MD] Finished setup_potential.
+17:09:12 - [MD] Finished setup_fluid.
+17:09:12 - [MD] Marking surface rock nodes.
+17:09:16 - [MD] Finished setup_rock.
+17:09:16 - [MD] Finished setup_dump.
+17:09:16 - [MD] Finished md_setup_dfz.
+17:09:16 - [MD] Initializing particles using <file:asc/xvow>...
+17:09:16 - [MD] Reading initial particle configuration (x,v,o,w) from file <init.cfg>...
+17:09:16 - [MD] Placed a total of 1 particles (serial).
+17:09:16 - [MD] Skipped explicit initialization of velocities.
+17:09:16 - [MD] Initializing rotations from w0.
+17:09:16 - [MD] Finished particle setup.
+17:09:16 - [MD] Created particles.
+17:09:16 - [MD] first_inserted_puid = 2
+17:09:16 - [MD] Initialized neighbor lists.
+17:09:16 - [MD]   Setting initial average densities...
+17:09:16 - [MD]     pfr =   0.10000000E+01
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+calculating fractional distance !!! 
+17:09:16 - [MD] Initialized fluid.
+17:09:16 - [MD] Initialization complete.
+17:09:16 - [MD] Dumping particle data...
+17:09:16 - 
+17:09:16 - Current site occupation      %      sites
+17:09:16 - -fluid                   99.97  184263493
+17:09:16 - -particle                 0.03      56507
+17:09:16 - -rock                     0.00          0
+17:09:16 - -rock surface             0.00          0
+17:09:16 - -total                  100.00  184320000
+17:09:16 - 
+17:09:16 - 
+17:09:16 - =============================( Start LBE sanity check )=============================
+17:09:16 - 
+17:09:16 - Total densities (r,b,g)      :   1.84263493E+08   0.00000000E+00   0.00000000E+00
+17:09:16 - Average densities (r,b,g)    :   9.99693430E-01   0.00000000E+00   0.00000000E+00
+17:09:16 - Total/average density        :   1.84263493E+08   9.99693430E-01
+17:09:16 - 
+17:09:16 - Maximum absolute velocity    :
+17:09:16 -       red (x,y,z)            :   0.00000000E+00   1.38777878E-17   9.00000000E-02
+17:09:16 -       at position            : (  40,  80, 180) (  40,  80, 180) (  40,  80, 180)
+17:09:16 - Average velocity             :
+17:09:16 -       red (x,y,z)            :   0.00000000E+00  -1.38735333E-17   8.99724087E-02
+17:09:16 - 
+17:09:16 - Total fluid momentum (x,y,z) :   0.00000000E+00   0.00000000E+00   0.00000000E+00
+17:09:16 - Total mass                   :   1.84320042E+08
+17:09:16 - Total avg velocity (x,y,z)   :   3.46838254E-18   3.46838254E-18   8.99723884E-02
+17:09:16 - 
+17:09:16 - ==============================( End LBE sanity check )==============================
+17:09:16 - 
+17:09:16 - 
+17:09:16 - ===============================( Starting time loop )===============================
+17:09:16 - 
+17:09:16 - Starting timestep 1
+17:09:18 - Starting timestep 2
+17:09:20 - Starting timestep 3
+17:09:22 - Starting timestep 4
+17:09:25 - Starting timestep 5
+17:09:27 - Starting timestep 6
+17:09:29 - Starting timestep 7
+17:09:31 - Starting timestep 8
+17:09:33 - Starting timestep 9
+17:09:35 - Starting timestep 10
+17:09:37 - [MD] Dumping particle data...
+17:09:37 - Starting timestep 11
+17:09:39 - Starting timestep 12
+17:09:41 - Starting timestep 13
+17:09:43 - Starting timestep 14
+17:09:45 - Starting timestep 15
+17:09:47 - Starting timestep 16
+17:09:49 - Starting timestep 17
+17:09:51 - Starting timestep 18
+17:09:53 - Starting timestep 19
+17:09:55 - Starting timestep 20
+17:09:57 - [MD] Dumping particle data...
+17:09:57 - Starting timestep 21
+17:09:59 - Starting timestep 22
+17:10:01 - Starting timestep 23
+17:10:03 - Starting timestep 24
+17:10:05 - Starting timestep 25
+17:10:07 - Starting timestep 26
+17:10:09 - Starting timestep 27
+17:10:11 - Starting timestep 28
+17:10:13 - Starting timestep 29
+17:10:15 - Starting timestep 30
+17:10:17 - [MD] Dumping particle data...
+17:10:17 - Starting timestep 31
+17:10:19 - Starting timestep 32
+17:10:21 - Starting timestep 33
+17:10:23 - Starting timestep 34
+17:10:25 - Starting timestep 35
+17:10:27 - Starting timestep 36
+17:10:29 - Starting timestep 37
+17:10:31 - Starting timestep 38
+17:10:33 - Starting timestep 39
+17:10:35 - Starting timestep 40
+17:10:37 - [MD] Dumping particle data...
+17:10:37 - Starting timestep 41
+17:10:39 - Starting timestep 42
+17:10:41 - Starting timestep 43
+17:10:43 - Starting timestep 44
+17:10:45 - Starting timestep 45
+17:10:47 - Starting timestep 46
+17:10:50 - Starting timestep 47
+17:10:52 - Starting timestep 48
+17:10:54 - Starting timestep 49
+17:10:56 - Starting timestep 50
+17:10:58 - [MD] Dumping particle data...
+17:10:58 - Starting timestep 51
+17:11:00 - Starting timestep 52
+17:11:02 - Starting timestep 53
+17:11:04 - Starting timestep 54
+17:11:06 - Starting timestep 55
+17:11:08 - Starting timestep 56
+17:11:10 - Starting timestep 57
+17:11:12 - Starting timestep 58
+17:11:14 - Starting timestep 59
+17:11:16 - Starting timestep 60
+17:11:18 - [MD] Dumping particle data...
+17:11:18 - Starting timestep 61
+17:11:20 - Starting timestep 62
+17:11:22 - Starting timestep 63
+17:11:24 - Starting timestep 64
+17:11:26 - Starting timestep 65
+17:11:28 - Starting timestep 66
+17:11:30 - Starting timestep 67
+17:11:32 - Starting timestep 68
+17:11:34 - Starting timestep 69
+17:11:36 - Starting timestep 70
+17:11:38 - [MD] Dumping particle data...
+17:11:38 - Starting timestep 71
+17:11:40 - Starting timestep 72
+17:11:42 - Starting timestep 73
+17:11:44 - Starting timestep 74
+17:11:46 - Starting timestep 75
+17:11:48 - Starting timestep 76
+17:11:50 - Starting timestep 77
+17:11:52 - Starting timestep 78
+17:11:54 - Starting timestep 79
+17:11:56 - Starting timestep 80
+17:11:58 - [MD] Dumping particle data...
+17:11:58 - Starting timestep 81
+17:12:00 - Starting timestep 82
+17:12:02 - Starting timestep 83
+17:12:04 - Starting timestep 84
+17:12:07 - Starting timestep 85
+17:12:09 - Starting timestep 86
+17:12:11 - Starting timestep 87
+17:12:13 - Starting timestep 88
+17:12:15 - Starting timestep 89
+17:12:17 - Starting timestep 90
+17:12:19 - [MD] Dumping particle data...
+17:12:19 - Starting timestep 91
+17:12:21 - Starting timestep 92
+17:12:23 - Starting timestep 93
+17:12:25 - Starting timestep 94
+17:12:27 - Starting timestep 95
+17:12:29 - Starting timestep 96
+17:12:31 - Starting timestep 97
+17:12:33 - Starting timestep 98
+17:12:35 - Starting timestep 99
+17:12:37 - Starting timestep 100
+17:12:39 - [MD] Dumping particle data...
+17:12:39 - Starting timestep 101
+17:12:41 - Starting timestep 102
+17:12:43 - Starting timestep 103
+17:12:45 - Starting timestep 104
+17:12:47 - Starting timestep 105
+17:12:49 - Starting timestep 106
+17:12:51 - Starting timestep 107
+17:12:53 - Starting timestep 108
+17:12:55 - Starting timestep 109
+17:12:57 - Starting timestep 110
+17:12:59 - [MD] Dumping particle data...
+17:12:59 - Starting timestep 111
+17:13:01 - Starting timestep 112
+17:13:03 - Starting timestep 113
+17:13:05 - Starting timestep 114
+17:13:07 - Starting timestep 115
+17:13:09 - Starting timestep 116
+17:13:11 - Starting timestep 117
+17:13:13 - Starting timestep 118
+17:13:15 - Starting timestep 119
+17:13:17 - Starting timestep 120
+17:13:20 - [MD] Dumping particle data...
+17:13:20 - Starting timestep 121
+17:13:22 - Starting timestep 122
+17:13:24 - Starting timestep 123
+17:13:26 - Starting timestep 124
+17:13:28 - Starting timestep 125
+17:13:30 - Starting timestep 126
+17:13:32 - Starting timestep 127
+17:13:34 - Starting timestep 128
+17:13:36 - Starting timestep 129
+17:13:38 - Starting timestep 130
+17:13:40 - [MD] Dumping particle data...
+17:13:40 - Starting timestep 131
+17:13:42 - Starting timestep 132
+17:13:44 - Starting timestep 133
+17:13:46 - Starting timestep 134
+17:13:48 - Starting timestep 135
+17:13:50 - Starting timestep 136
+17:13:52 - Starting timestep 137
+17:13:54 - Starting timestep 138
+17:13:56 - Starting timestep 139
+17:13:58 - Starting timestep 140
+17:14:00 - [MD] Dumping particle data...
+17:14:00 - Starting timestep 141
+17:14:02 - Starting timestep 142
+17:14:04 - Starting timestep 143
+17:14:06 - Starting timestep 144
+17:14:08 - Starting timestep 145
+17:14:10 - Starting timestep 146
+17:14:12 - Starting timestep 147
+17:14:14 - Starting timestep 148
+17:14:16 - Starting timestep 149
+17:14:18 - Starting timestep 150
+17:14:20 - [MD] Dumping particle data...
+17:14:20 - Starting timestep 151
+17:14:22 - Starting timestep 152
+17:14:24 - Starting timestep 153
+17:14:26 - Starting timestep 154
+17:14:28 - Starting timestep 155
+17:14:30 - Starting timestep 156
+17:14:33 - Starting timestep 157
+17:14:35 - Starting timestep 158
+17:14:37 - Starting timestep 159
+17:14:39 - Starting timestep 160
+17:14:41 - [MD] Dumping particle data...
+17:14:41 - Starting timestep 161
+17:14:43 - Starting timestep 162
+17:14:45 - Starting timestep 163
+17:14:47 - Starting timestep 164
+17:14:49 - Starting timestep 165
+17:14:51 - Starting timestep 166
+17:14:53 - Starting timestep 167
+17:14:55 - Starting timestep 168
+17:14:57 - Starting timestep 169
+17:14:59 - Starting timestep 170
+17:15:01 - [MD] Dumping particle data...
+17:15:01 - Starting timestep 171
+17:15:03 - Starting timestep 172
+17:15:05 - Starting timestep 173
+17:15:07 - Starting timestep 174
+17:15:09 - Starting timestep 175
+17:15:11 - Starting timestep 176
+17:15:13 - Starting timestep 177
+17:15:15 - Starting timestep 178
+17:15:17 - Starting timestep 179
+17:15:19 - Starting timestep 180
+17:15:21 - [MD] Dumping particle data...
+17:15:21 - Starting timestep 181
+17:15:23 - Starting timestep 182
+17:15:25 - Starting timestep 183
+17:15:27 - Starting timestep 184
+17:15:29 - Starting timestep 185
+17:15:31 - Starting timestep 186
+17:15:33 - Starting timestep 187
+17:15:35 - Starting timestep 188
+17:15:37 - Starting timestep 189
+17:15:39 - Starting timestep 190
+17:15:41 - [MD] Dumping particle data...
+17:15:41 - Starting timestep 191
+17:15:43 - Starting timestep 192
+17:15:46 - Starting timestep 193
+17:15:48 - Starting timestep 194
+17:15:50 - Starting timestep 195
+17:15:52 - Starting timestep 196
+17:15:54 - Starting timestep 197
+17:15:56 - Starting timestep 198
+17:15:58 - Starting timestep 199
+17:16:00 - Starting timestep 200
+17:16:02 - [MD] Dumping particle data...
+17:16:02 - Starting timestep 201
+17:16:04 - Starting timestep 202
+17:16:06 - Starting timestep 203
+17:16:08 - Starting timestep 204
+17:16:10 - Starting timestep 205
+17:16:12 - Starting timestep 206
+17:16:14 - Starting timestep 207
+17:16:16 - Starting timestep 208
+17:16:18 - Starting timestep 209
+17:16:20 - Starting timestep 210
+17:16:22 - [MD] Dumping particle data...
+17:16:22 - Starting timestep 211
+17:16:24 - Starting timestep 212
+17:16:26 - Starting timestep 213
+17:16:28 - Starting timestep 214
+17:16:30 - Starting timestep 215
+17:16:32 - Starting timestep 216
+17:16:34 - Starting timestep 217
+17:16:36 - Starting timestep 218
+17:16:38 - Starting timestep 219
+17:16:40 - Starting timestep 220
+17:16:42 - [MD] Dumping particle data...
+17:16:42 - Starting timestep 221
+17:16:44 - Starting timestep 222
+17:16:46 - Starting timestep 223
+17:16:48 - Starting timestep 224
+17:16:50 - Starting timestep 225
+17:16:52 - Starting timestep 226
+17:16:54 - Starting timestep 227
+17:16:56 - Starting timestep 228
+17:16:59 - Starting timestep 229
+17:17:01 - Starting timestep 230
+17:17:03 - [MD] Dumping particle data...
+17:17:03 - Starting timestep 231
+17:17:05 - Starting timestep 232
+17:17:07 - Starting timestep 233
+17:17:09 - Starting timestep 234
+17:17:11 - Starting timestep 235
+17:17:13 - Starting timestep 236
+17:17:15 - Starting timestep 237
+17:17:17 - Starting timestep 238
+17:17:19 - Starting timestep 239
+17:17:21 - Starting timestep 240
+17:17:23 - [MD] Dumping particle data...
+17:17:23 - Starting timestep 241
+17:17:25 - Starting timestep 242
+17:17:27 - Starting timestep 243
+17:17:29 - Starting timestep 244
+17:17:31 - Starting timestep 245
+17:17:33 - Starting timestep 246
+17:17:35 - Starting timestep 247
+17:17:37 - Starting timestep 248
+17:17:39 - Starting timestep 249
+17:17:41 - Starting timestep 250
+17:17:43 - [MD] Dumping particle data...
+17:17:43 - Starting timestep 251
+17:17:45 - Starting timestep 252
+17:17:47 - Starting timestep 253
+17:17:49 - Starting timestep 254
+17:17:51 - Starting timestep 255
+17:17:53 - Starting timestep 256
+17:17:55 - Starting timestep 257
+17:17:57 - Starting timestep 258
+17:17:59 - Starting timestep 259
+17:18:01 - Starting timestep 260
+17:18:03 - [MD] Dumping particle data...
+17:18:03 - Starting timestep 261
+17:18:05 - Starting timestep 262
+17:18:07 - Starting timestep 263
+17:18:09 - Starting timestep 264
+17:18:11 - Starting timestep 265
+17:18:14 - Starting timestep 266
+17:18:16 - Starting timestep 267
+17:18:18 - Starting timestep 268
+17:18:20 - Starting timestep 269
+17:18:22 - Starting timestep 270
+17:18:24 - [MD] Dumping particle data...
+17:18:24 - Starting timestep 271
+17:18:26 - Starting timestep 272
+17:18:28 - Starting timestep 273
+17:18:30 - Starting timestep 274
+17:18:32 - Starting timestep 275
+17:18:34 - Starting timestep 276
+17:18:36 - Starting timestep 277
+17:18:38 - Starting timestep 278
+17:18:40 - Starting timestep 279
+17:18:42 - Starting timestep 280
+17:18:44 - [MD] Dumping particle data...
+17:18:44 - Starting timestep 281
+17:18:46 - Starting timestep 282
+17:18:48 - Starting timestep 283
+17:18:50 - Starting timestep 284
+17:18:52 - Starting timestep 285
+17:18:54 - Starting timestep 286
+17:18:56 - Starting timestep 287
+17:18:58 - Starting timestep 288
+17:19:00 - Starting timestep 289
+17:19:02 - Starting timestep 290
+17:19:04 - [MD] Dumping particle data...
+17:19:04 - Starting timestep 291
+17:19:06 - Starting timestep 292
+17:19:08 - Starting timestep 293
+17:19:10 - Starting timestep 294
+17:19:12 - Starting timestep 295
+17:19:14 - Starting timestep 296
+17:19:16 - Starting timestep 297
+17:19:18 - Starting timestep 298
+17:19:20 - Starting timestep 299
+17:19:22 - Starting timestep 300
+17:19:25 - [MD] Dumping particle data...
+17:19:25 - Starting timestep 301
+17:19:27 - Starting timestep 302
+17:19:29 - Starting timestep 303
+17:19:31 - Starting timestep 304
+17:19:33 - Starting timestep 305
+17:19:35 - Starting timestep 306
+17:19:37 - Starting timestep 307
+17:19:39 - Starting timestep 308
+17:19:41 - Starting timestep 309
+17:19:43 - Starting timestep 310
+17:19:45 - [MD] Dumping particle data...
+17:19:45 - Starting timestep 311
+17:19:47 - Starting timestep 312
+17:19:49 - Starting timestep 313
+17:19:51 - Starting timestep 314
+17:19:53 - Starting timestep 315
+17:19:55 - Starting timestep 316
+17:19:57 - Starting timestep 317
+17:19:59 - Starting timestep 318
+17:20:01 - Starting timestep 319
+17:20:03 - Starting timestep 320
+17:20:05 - [MD] Dumping particle data...
+17:20:05 - Starting timestep 321
+17:20:07 - Starting timestep 322
+17:20:09 - Starting timestep 323
+17:20:11 - Starting timestep 324
+17:20:13 - Starting timestep 325
+17:20:15 - Starting timestep 326
+17:20:17 - Starting timestep 327
+17:20:19 - Starting timestep 328
+17:20:21 - Starting timestep 329
+17:20:23 - Starting timestep 330
+17:20:25 - [MD] Dumping particle data...
+17:20:25 - Starting timestep 331
+17:20:27 - Starting timestep 332
+17:20:29 - Starting timestep 333
+17:20:31 - Starting timestep 334
+17:20:33 - Starting timestep 335
+17:20:36 - Starting timestep 336
+17:20:38 - Starting timestep 337
+17:20:40 - Starting timestep 338
+17:20:42 - Starting timestep 339
+17:20:44 - Starting timestep 340
+17:20:46 - [MD] Dumping particle data...
+17:20:46 - Starting timestep 341
+17:20:48 - Starting timestep 342
+17:20:50 - Starting timestep 343
+17:20:52 - Starting timestep 344
+17:20:54 - Starting timestep 345
+17:20:56 - Starting timestep 346
+17:20:58 - Starting timestep 347
+17:21:00 - Starting timestep 348
+17:21:02 - Starting timestep 349
+17:21:04 - Starting timestep 350
+17:21:06 - [MD] Dumping particle data...
+17:21:06 - Starting timestep 351
+17:21:08 - Starting timestep 352
+17:21:10 - Starting timestep 353
+17:21:12 - Starting timestep 354
+17:21:14 - Starting timestep 355
+17:21:16 - Starting timestep 356
+17:21:18 - Starting timestep 357
+17:21:20 - Starting timestep 358
+17:21:22 - Starting timestep 359
+17:21:24 - Starting timestep 360
+17:21:26 - [MD] Dumping particle data...
+17:21:26 - Starting timestep 361
+17:21:28 - Starting timestep 362
+17:21:30 - Starting timestep 363
+17:21:32 - Starting timestep 364
+17:21:34 - Starting timestep 365
+17:21:36 - Starting timestep 366
+17:21:38 - Starting timestep 367
+17:21:40 - Starting timestep 368
+17:21:42 - Starting timestep 369
+17:21:45 - Starting timestep 370
+17:21:47 - [MD] Dumping particle data...
+17:21:47 - Starting timestep 371
+17:21:49 - Starting timestep 372
+17:21:51 - Starting timestep 373
+17:21:53 - Starting timestep 374
+17:21:55 - Starting timestep 375
+17:21:57 - Starting timestep 376
+17:21:59 - Starting timestep 377
+17:22:01 - Starting timestep 378
+17:22:03 - Starting timestep 379
+17:22:05 - Starting timestep 380
+17:22:07 - [MD] Dumping particle data...
+17:22:07 - Starting timestep 381
+17:22:09 - Starting timestep 382
+17:22:11 - Starting timestep 383
+17:22:13 - Starting timestep 384
+17:22:15 - Starting timestep 385
+17:22:17 - Starting timestep 386
+17:22:19 - Starting timestep 387
+17:22:21 - Starting timestep 388
+17:22:23 - Starting timestep 389
+17:22:25 - Starting timestep 390
+17:22:27 - [MD] Dumping particle data...
+17:22:27 - Starting timestep 391
+17:22:29 - Starting timestep 392
+17:22:31 - Starting timestep 393
+17:22:33 - Starting timestep 394
+17:22:35 - Starting timestep 395
+17:22:37 - Starting timestep 396
+17:22:39 - Starting timestep 397
+17:22:41 - Starting timestep 398
+17:22:43 - Starting timestep 399
+17:22:45 - Starting timestep 400
+17:22:47 - [MD] Dumping particle data...
+17:22:47 - Starting timestep 401
+17:22:50 - Starting timestep 402
+17:22:52 - Starting timestep 403
+17:22:54 - Starting timestep 404
+17:22:56 - Starting timestep 405
+17:22:58 - Starting timestep 406
+17:23:00 - Starting timestep 407
+17:23:02 - Starting timestep 408
+17:23:04 - Starting timestep 409
+17:23:06 - Starting timestep 410
+17:23:08 - [MD] Dumping particle data...
+17:23:08 - Starting timestep 411
+17:23:10 - Starting timestep 412
+17:23:12 - Starting timestep 413
+17:23:14 - Starting timestep 414
+17:23:16 - Starting timestep 415
+17:23:18 - Starting timestep 416
+17:23:20 - Starting timestep 417
+17:23:22 - Starting timestep 418
+17:23:24 - Starting timestep 419
+17:23:26 - Starting timestep 420
+17:23:28 - [MD] Dumping particle data...
+17:23:28 - Starting timestep 421
+17:23:30 - Starting timestep 422
+17:23:32 - Starting timestep 423
+17:23:34 - Starting timestep 424
+17:23:36 - Starting timestep 425
+17:23:38 - Starting timestep 426
+17:23:40 - Starting timestep 427
+17:23:42 - Starting timestep 428
+17:23:44 - Starting timestep 429
+17:23:46 - Starting timestep 430
+17:23:49 - [MD] Dumping particle data...
+17:23:49 - Starting timestep 431
+17:23:51 - Starting timestep 432
+17:23:53 - Starting timestep 433
+17:23:55 - Starting timestep 434
+17:23:57 - Starting timestep 435
+17:23:59 - Starting timestep 436
+17:24:01 - Starting timestep 437
+17:24:03 - Starting timestep 438
+17:24:05 - Starting timestep 439
+17:24:07 - Starting timestep 440
+17:24:09 - [MD] Dumping particle data...
+17:24:09 - Starting timestep 441
+17:24:11 - Starting timestep 442
+17:24:13 - Starting timestep 443
+17:24:15 - Starting timestep 444
+17:24:17 - Starting timestep 445
+17:24:19 - Starting timestep 446
+17:24:21 - Starting timestep 447
+17:24:23 - Starting timestep 448
+17:24:25 - Starting timestep 449
+17:24:27 - Starting timestep 450
+17:24:29 - [MD] Dumping particle data...
+17:24:29 - Starting timestep 451
+17:24:31 - Starting timestep 452
+17:24:33 - Starting timestep 453
+17:24:35 - Starting timestep 454
+17:24:37 - Starting timestep 455
+17:24:39 - Starting timestep 456
+17:24:41 - Starting timestep 457
+17:24:43 - Starting timestep 458
+17:24:45 - Starting timestep 459
+17:24:47 - Starting timestep 460
+17:24:49 - [MD] Dumping particle data...
+17:24:49 - Starting timestep 461
+17:24:51 - Starting timestep 462
+17:24:53 - Starting timestep 463
+17:24:56 - Starting timestep 464
+17:24:58 - Starting timestep 465
+17:25:00 - Starting timestep 466
+17:25:02 - Starting timestep 467
+17:25:04 - Starting timestep 468
+17:25:06 - Starting timestep 469
+17:25:08 - Starting timestep 470
+17:25:10 - [MD] Dumping particle data...
+17:25:10 - Starting timestep 471
+17:25:12 - Starting timestep 472
+17:25:14 - Starting timestep 473
+17:25:16 - Starting timestep 474
+17:25:18 - Starting timestep 475
+17:25:20 - Starting timestep 476
+17:25:22 - Starting timestep 477
+17:25:24 - Starting timestep 478
+17:25:26 - Starting timestep 479
+17:25:28 - Starting timestep 480
+17:25:30 - [MD] Dumping particle data...
+17:25:30 - Starting timestep 481
+17:25:32 - Starting timestep 482
+17:25:34 - Starting timestep 483
+17:25:36 - Starting timestep 484
+17:25:38 - Starting timestep 485
+17:25:40 - Starting timestep 486
+17:25:42 - Starting timestep 487
+17:25:44 - Starting timestep 488
+17:25:46 - Starting timestep 489
+17:25:48 - Starting timestep 490
+17:25:50 - [MD] Dumping particle data...
+17:25:50 - Starting timestep 491
+17:25:52 - Starting timestep 492
+17:25:55 - Starting timestep 493
+17:25:57 - Starting timestep 494
+17:25:59 - Starting timestep 495
+17:26:01 - Starting timestep 496
+17:26:03 - Starting timestep 497
+17:26:05 - Starting timestep 498
+17:26:07 - Starting timestep 499
+17:26:09 - Starting timestep 500
+17:26:11 - [MD] Dumping particle data...
+17:26:11 - 
+17:26:11 - =============================( Start LBE sanity check )=============================
+17:26:11 - 
+17:26:11 - Total densities (r,b,g)      :   1.84263306E+08   0.00000000E+00   0.00000000E+00
+17:26:11 - Average densities (r,b,g)    :   9.99692413E-01   0.00000000E+00   0.00000000E+00
+17:26:11 - Total/average density        :   1.84263306E+08   9.99692413E-01
+17:26:11 - 
+17:26:11 - Maximum absolute velocity    :
+17:26:11 -       red (x,y,z)            :   4.60402676E-02   5.59992446E-02   1.07584081E-01
+17:26:11 -       at position            : ( 167, 344, 251) ( 160, 299, 355) ( 161, 355, 253)
+17:26:11 - Average velocity             :
+17:26:11 -       red (x,y,z)            :  -3.79705482E-09  -1.42261170E-05   8.99523349E-02
+17:26:11 - 
+17:26:11 - ********  WARNING: MAXIMUM  red VELOCITY IS TOO HIGH!  ********
+17:26:11 - ********  WARNING: absolute species velocity higher than  1.00000000E-01 on 34443 lattice sites (  1.86922539E-02 % of total fluid sites)  ********
+17:26:11 - Total fluid momentum (x,y,z) :  -5.43271378E-01  -2.63020549E+03   1.65799865E+07
+17:26:11 - Total mass                   :   1.84319854E+08
+17:26:11 - Total avg velocity (x,y,z)   :  -2.94743819E-09  -1.42697893E-05   8.99522547E-02
+17:26:11 - 
+17:26:11 - ==============================( End LBE sanity check )==============================
+17:26:11 - 
+17:26:11 - Starting timestep 501
+17:26:13 - Starting timestep 502
+17:26:15 - Starting timestep 503
+17:26:17 - Starting timestep 504
+17:26:19 - Starting timestep 505
+17:26:21 - Starting timestep 506
+17:26:23 - Starting timestep 507
+17:26:25 - Starting timestep 508
+17:26:27 - Starting timestep 509
+17:26:29 - Starting timestep 510
+17:26:31 - [MD] Dumping particle data...
+17:26:31 - Starting timestep 511
+17:26:33 - Starting timestep 512
+17:26:36 - Starting timestep 513
+17:26:38 - Starting timestep 514
+17:26:40 - Starting timestep 515
+17:26:42 - Starting timestep 516
+17:26:44 - Starting timestep 517
+17:26:46 - Starting timestep 518
+17:26:48 - Starting timestep 519
+17:26:50 - Starting timestep 520
+17:26:52 - [MD] Dumping particle data...
+17:26:52 - Starting timestep 521
+17:26:54 - Starting timestep 522
+17:26:56 - Starting timestep 523
+17:26:58 - Starting timestep 524
+17:27:00 - Starting timestep 525
+17:27:02 - Starting timestep 526
+17:27:04 - Starting timestep 527
+17:27:06 - Starting timestep 528
+17:27:08 - Starting timestep 529
+17:27:10 - Starting timestep 530
+17:27:12 - [MD] Dumping particle data...
+17:27:12 - Starting timestep 531
+17:27:14 - Starting timestep 532
+17:27:16 - Starting timestep 533
+17:27:18 - Starting timestep 534
+17:27:20 - Starting timestep 535
+17:27:22 - Starting timestep 536
+17:27:24 - Starting timestep 537
+17:27:26 - Starting timestep 538
+17:27:28 - Starting timestep 539
+17:27:30 - Starting timestep 540
+17:27:32 - [MD] Dumping particle data...
+17:27:32 - Starting timestep 541
+17:27:34 - Starting timestep 542
+17:27:36 - Starting timestep 543
+17:27:38 - Starting timestep 544
+17:27:40 - Starting timestep 545
+17:27:43 - Starting timestep 546
+17:27:45 - Starting timestep 547
+17:27:47 - Starting timestep 548
+17:27:49 - Starting timestep 549
+17:27:51 - Starting timestep 550
+17:27:53 - [MD] Dumping particle data...
+17:27:53 - Starting timestep 551
+17:27:55 - Starting timestep 552
+17:27:57 - Starting timestep 553
+17:27:59 - Starting timestep 554
+17:28:01 - Starting timestep 555
+17:28:03 - Starting timestep 556
+17:28:05 - Starting timestep 557
+17:28:07 - Starting timestep 558
+17:28:09 - Starting timestep 559
+17:28:11 - Starting timestep 560
+17:28:13 - [MD] Dumping particle data...
+17:28:13 - Starting timestep 561
+17:28:15 - Starting timestep 562
+17:28:17 - Starting timestep 563
+17:28:19 - Starting timestep 564
+17:28:21 - Starting timestep 565
+17:28:23 - Starting timestep 566
+17:28:25 - Starting timestep 567
+17:28:27 - Starting timestep 568
+17:28:29 - Starting timestep 569
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** STEP 821572.0 ON n0705 CANCELLED AT 2021-03-23T17:28:31 ***
+slurmstepd: error: *** JOB 821572 ON n0705 CANCELLED AT 2021-03-23T17:28:31 ***

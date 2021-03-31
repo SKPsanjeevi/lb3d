@@ -1,0 +1,64 @@
+&fixed_input
+nx = 384 !192 
+ny = 384 !192 
+nz = 576 !192 
+seed = 1
+
+! obs_file = 'rockconf.xdr'
+
+boundary_cond = -1 ! 0
+
+
+dbg_report_topology = .false.
+/
+
+&variable_input
+n_iteration = 15000 
+n_sci_start = 0
+sci_int = .false.
+n_sci_int = 100
+sci_od = .true.
+n_sci_od = 15000
+sci_wd = .false.
+n_sci_wd = 100
+sci_dir = .false.
+sci_vel = .false.
+n_sci_vel = 5000
+sci_velocities = .true.
+n_sci_velocities = 15000
+sci_flo = .false.
+sci_arrows = .false.
+sci_rock = .false.
+n_sci_rock = 10000
+
+post = .true.
+folder = 'Production'
+cpfolder = '.'
+gr_out_file = 'out'
+init_cond = -5 !-4
+inv_fluid = 18 !-1 !11 
+!fr = 1.0
+fg = 0.0
+fb = 0.0
+fr1 = 16
+fr2 = 16
+!pr = 0.999968
+pr = 0.09 !0.069886
+pg = 0.0
+/
+
+&lbe_input
+amass_r = 1.0
+tau_r = 0.5732885  !1.802921   !0.527
+
+
+bcsel = 2 
+acccoef = 2
+bdist = 2
+n_checkpoint = 0
+num_chkp_files = 2
+dump_format = "hdf"
+dump_double = .false.
+n_sanity_check = 500
+/
+
