@@ -8,7 +8,7 @@ declare -a array=(0 10 30 45 60 80 90)
 # declare -a array=(30)
 # declare -a array=(0 90)
 for deg in "${array[@]}"; do
-  target=Re1000ang$deg
+  target=Re2000ang$deg
   mkdir -p $target
   cp in* $target/
   cp myjob.cmd $target/
