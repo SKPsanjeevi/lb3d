@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import glob as gb
 import math
 
-Re = 2000
+Re = 1000
 rho = 1.
 U = 0.09
 R_eq = 25.198
@@ -25,10 +25,10 @@ for i in range(len(ang)):
 	df['Cl'] = df['Fl']/(0.5*rho*A*U**2.)
 	df['Ct'] = df['Tp']/(0.5*rho*A*R_eq*U**2.)
 	# Compute drag for last N*dt steps
-	N = 1000  # dt = 10; So last 10000 timesteps
-	Cd[i] = df['Cd'].tail(1000).mean(axis=0)
-	Cl[i] = df['Cl'].tail(1000).mean(axis=0)
-	Ct[i] = df['Ct'].tail(1000).mean(axis=0)
+	N = 2000  # dt = 10; So last 20000 timesteps
+	Cd[i] = df['Cd'].tail(N).mean(axis=0)
+	Cl[i] = df['Cl'].tail(N).mean(axis=0)
+	Ct[i] = df['Ct'].tail(N).mean(axis=0)
 	np.set_printoptions(precision=3)
 	print(Cd[i])
 	df.loc[1000:].plot(x='timestep', y='Cd')
