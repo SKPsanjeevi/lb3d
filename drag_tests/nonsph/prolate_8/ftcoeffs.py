@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import glob as gb
 import math
 
-Re = 1000
+Re = 2000
 rho = 1.
 U = 0.09
 R_eq = 30. #23.811
